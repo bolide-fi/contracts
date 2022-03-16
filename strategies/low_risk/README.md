@@ -2,6 +2,13 @@
 
 [`Strategy description`](https://docs.bolide.fi/protocol/strategies/low-risk-strategy "Description")
 
+## For testing
+0. Install Truffle and Ganache
+
+1. Run the `npm i`
+2. Run the `truffle compile` command to compile the smart contracts
+3. Run the `truffle test test`
+
 
 ## Logic.sol error codes:
 - E1 - Cannot accept
@@ -11,6 +18,7 @@
 - E5 - vToken is not used
 - E6 - blid was set
 - E7 - storage was set
+
 
 ## StorageV0.sol error codes:
 - E1 - token is not used
