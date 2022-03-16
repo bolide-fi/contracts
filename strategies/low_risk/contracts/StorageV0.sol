@@ -9,8 +9,16 @@ import '@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeab
 import '@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol';
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-import "./ILogicContract.sol";
-import "./AggregatorV3Interface.sol";
+
+interface LogicContract {
+    function  returnToken(uint amount, address token) external;
+}
+
+
+interface AggregatorV3Interface {
+    function decimals() external view returns (uint8);
+    function latestAnswer() external view returns (int256 answer);
+}
 
 
 contract StorageV0 is Initializable, OwnableUpgradeable,PausableUpgradeable{
@@ -115,7 +123,6 @@ contract StorageV0 is Initializable, OwnableUpgradeable,PausableUpgradeable{
             LogicContract(logicContract).returnToken(amount ,token);
             interestFee();
             IERC20Upgradeable(token).safeTransferFrom(logicContract,msg.sender,amount);
-            IERC20Upgradeable(token).safeTransfer(msg.sender,amount);
             tokenDeposited[token]-= amount*10**(18-decimals);
             tokenTime[token]-=int(block.timestamp*( amount*10**(18-decimals)));
 
