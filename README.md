@@ -1,8 +1,32 @@
-![alt text](https://files.gitbook.com/v0/b/gitbook-x-prod.appspot.com/o/spaces%2FaYQax895rXUvcnWRADRn%2Fuploads%2FmO9ddATm9pqKvJPemqMw%2F93.png?alt=media&token=87ff7173-a21c-438f-bf60-93020a1ee190)
+
+![](https://app.bolide.fi/img/logo.2e415e1c.svg "Bolide")
+
 # Bolide Finance / Smart Contracts
-Bolide is decentralised Cryptocurrency investment platform. It allows users to invest cryptocurrency assets in a set of algorithm-based investment strategies to have income in a safe and decentralized manner. 
 
+### 🌐 Contacts:
+- [https://bolide.fi/](https://bolide.fi/)
+- [Telegram](https://t.me/bolidefi)
+- [Medium](https://medium.com/@Bolide.fi)
+- [Discord](https://discord.com/invite/bolide)
+---
+## [💰Our App💰](https://app.bolide.fi/)
+---
+## [⚡️Documentation⚡️](https://docs.bolide.fi/)
+---
+✌️ **Bolide** is decentralised Cryptocurrency investment platform. It allows users to invest cryptocurrency assets in a set of algorithm-based investment strategies to have income in a safe and decentralized manner.
 
-## Contract list
-### ERC20 token (BLID)
-Deployed on Mainnet ([`0x8A7aDc1B690E81c758F1BD0F72DFe27Ae6eC56A5`](https://etherscan.io/token/0x8a7adc1b690e81c758f1bd0f72dfe27ae6ec56a5 "BLID token") )
+---
+## Navigation:
+- 👉 [Bolide ERC20 token contracts](token/README.md)
+- 👉 [Private Sale contracts](private_sale/README.md)
+- 👉 [Staking/Farming contracts](farming/README.md)
+- 👉 [Strategies contracts](strategies/low_risk/README.md)
+- 👉 [Vesting contracts](vesting/README.md)
+
+---
+## 👷‍♂️ Tech Requirements:
++ Truffle: v5.5
++ Ganache
++ Solidity: ^0.8.0
++ Node: >= v17.6.0
++ npm: >=8.5.1

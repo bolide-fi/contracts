@@ -1,16 +1,19 @@
 # Low risk strategy contracts
 
-[`Strategy description`](https://docs.bolide.fi/protocol/strategies/low-risk-strategy "Description")
+## [`How strategy does work`](https://docs.bolide.fi/protocol/strategies/low-risk-strategy "Description")
 
-## For testing
-0. Install Truffle and Ganache
+---
+## [👷‍♂️ Tech Requirements](../../README.md#tech-requirements)
 
-1. Run the `npm i`
-2. Run the `truffle compile` command to compile the smart contracts
-3. Run the `truffle test test`
+---
+## How to run tests:
+- Run the `npm i`
+- Run the `truffle compile` command to compile the smart contracts
+- Run the `truffle test test`
+---
+## 📄 Description:
 
-
-## Logic.sol error codes:
+### Logic.sol error codes:
 - E1 - Cannot accept
 - E2 - vTokens is not used
 - E3 - swap is not used
@@ -20,7 +23,7 @@
 - E7 - storage was set
 
 
-## StorageV0.sol error codes:
+### StorageV0.sol error codes:
 - E1 - token is not used
 - E2 - is not logicContract
 - E3 - Amount need more than zero

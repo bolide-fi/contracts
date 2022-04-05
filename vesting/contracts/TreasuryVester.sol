@@ -1,31 +1,32 @@
-pragma solidity 0.6.12;
+pragma solidity 0.8.10;
 
-import '@openzeppelin/contracts/utils/math/SafeMath.sol';
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
-contract TreasuryVester {
-    using SafeMath for uint;
+contract TreasuryVester is Ownable {
+    using SafeMath for uint256;
 
     address public immutable blid;
     address public recipient;
 
-    uint public immutable vestingAmount;
-    uint public immutable vestingBegin;
-    uint public immutable vestingCliff;
-    uint public immutable vestingEnd;
+    uint256 public immutable vestingAmount;
+    uint256 public immutable vestingBegin;
+    uint256 public immutable vestingCliff;
+    uint256 public immutable vestingEnd;
 
-    uint public lastUpdate;
+    uint256 public lastUpdate;
 
     constructor(
         address blid_,
         address recipient_,
-        uint vestingAmount_,
-        uint vestingBegin_,
-        uint vestingCliff_,
-        uint vestingEnd_
-    ) public {
-        require(vestingBegin_ >= block.timestamp, 'TreasuryVester::constructor: vesting begin too early');
-        require(vestingCliff_ >= vestingBegin_, 'TreasuryVester::constructor: cliff is too early');
-        require(vestingEnd_ > vestingCliff_, 'TreasuryVester::constructor: end is too early');
+        uint256 vestingAmount_,
+        uint256 vestingBegin_,
+        uint256 vestingCliff_,
+        uint256 vestingEnd_
+    ) {
+        require(vestingBegin_ >= block.timestamp, "TreasuryVester::constructor: vesting begin too early");
+        require(vestingCliff_ >= vestingBegin_, "TreasuryVester::constructor: cliff is too early");
+        require(vestingEnd_ > vestingCliff_, "TreasuryVester::constructor: end is too early");
 
         blid = blid_;
         recipient = recipient_;
@@ -39,17 +40,18 @@ contract TreasuryVester {
     }
 
     function setRecipient(address recipient_) public {
-        require(msg.sender == recipient, 'TreasuryVester::setRecipient: unauthorized');
+        require(msg.sender == owner(), "TreasuryVester::setRecipient: unauthorized");
         recipient = recipient_;
     }
 
     function claim() public {
-        require(block.timestamp >= vestingCliff, 'TreasuryVester::claim: not time yet');
-        uint amount;
+        require(block.timestamp >= vestingCliff, "TreasuryVester::claim: not time yet");
+        uint256 amount;
         if (block.timestamp >= vestingEnd) {
             amount = IBlid(blid).balanceOf(address(this));
         } else {
-            amount = vestingAmount.mul(block.timestamp - lastUpdate).div(vestingEnd - vestingBegin);
+            amount = vestingAmount * 10**18;
+            amount = amount.mul(block.timestamp - lastUpdate).div(vestingEnd - vestingBegin);
             lastUpdate = block.timestamp;
         }
         IBlid(blid).transfer(recipient, amount);
@@ -57,6 +59,7 @@ contract TreasuryVester {
 }
 
 interface IBlid {
-    function balanceOf(address account) external view returns (uint);
-    function transfer(address dst, uint rawAmount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+
+    function transfer(address dst, uint256 rawAmount) external returns (bool);
 }

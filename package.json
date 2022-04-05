@@ -1,0 +1,23 @@
+{
+  "name": "contracts",
+  "version": "1.0.0",
+  "description": "![alt text](https://files.gitbook.com/v0/b/gitbook-x-prod.appspot.com/o/spaces%2FaYQax895rXUvcnWRADRn%2Fuploads%2FmO9ddATm9pqKvJPemqMw%2F93.png?alt=media&token=87ff7173-a21c-438f-bf60-93020a1ee190) # Bolide Finance / Smart Contracts Bolide is decentralised Cryptocurrency investment platform. It allows users to invest cryptocurrency assets in a set of algorithm-based investment strategies to have income in a safe and decentralized manner.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bolide-fi/contracts.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/bolide-fi/contracts/issues"
+  },
+  "homepage": "https://github.com/bolide-fi/contracts#readme",
+  "devDependencies": {
+    "prettier": "^2.6.2",
+    "prettier-plugin-solidity": "^1.0.0-beta.19"
+  }
+}

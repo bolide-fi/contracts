@@ -1,10 +1,7 @@
-# Farming
-
-This contract was forked from [`that contract`](https://github.com/pancakeswap/pancake-farm/blob/a61313bf107c7f82e1a0f5736d815041fbf8cdff/contracts/MasterChef.sol "Origin")
-
+# Bolide ERC20 Token
+Deployed on Ethereum Mainnet ([`0x8A7aDc1B690E81c758F1BD0F72DFe27Ae6eC56A5`](https://etherscan.io/token/0x8a7adc1b690e81c758f1bd0f72dfe27ae6ec56a5 "BLID token") )
 
 ## [Tech Requirements](../README.md#tech-requirements)
-
 
 ## How to run tests:
 1. Run the `npm i `
