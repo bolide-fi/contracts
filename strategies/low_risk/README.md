@@ -3,7 +3,7 @@
 ## [`How strategy does work`](https://docs.bolide.fi/protocol/strategies/low-risk-strategy "Description")
 
 ---
-## [👷‍♂️ Tech Requirements](../../README.md#tech-requirements)
+## [👷‍♂️ Tech Requirements](../../README.md#👷‍♂️-tech-requirements)
 
 ---
 ## How to run tests:
@@ -13,21 +13,29 @@
 ---
 ## 📄 Description:
 
-### Logic.sol error codes:
+One strategy includes two contracts: __Logic__ and __Storage__.
+
+### __Logic.sol__
+Provides manage depositors tokens ability to admin (oracle) strategy
+
+#### Error codes:
 - E1 - Cannot accept
 - E2 - vTokens is not used
 - E3 - swap is not used
 - E4 - swapMaster is not used
 - E5 - vToken is not used
-- E6 - blid was set
-- E7 - storage was set
+- E6 - blid is already set
+- E7 - storage is already set
 
+### __StorageV0.sol__
 
-### StorageV0.sol error codes:
+This contract is upgradable. Interacts with users, distributes earned BLID, and associates with Logic contract.
+
+#### Error codes:
 - E1 - token is not used
 - E2 - is not logicContract
-- E3 - Amount need more than zero
+- E3 - need more amount need than zero
 - E4 - withdraw amount exceeds balance
 - E5 - contracrt hasn't enough for interest fee, please contact the administrator
-- E6 - token was added
+- E6 - token is already added
 - E7 - iterate more than you can iterate

@@ -1,17 +1,66 @@
-# Private Sale
+# Private Sale contracts
 
+## [👷‍♂️ Tech Requirements](../README.md#👷‍♂️-tech-requirements)
 
-## [Tech Requirements](../README.md#tech-requirements)
-
-
+---
 ## How to run tests:
-1. Run the `npm i `
-2. Run the `truffle compile` command to compile the smart contracts
-3. Run the `truffle test test`
+- Run the `npm i`
+- Run the `truffle compile` command to compile the smart contracts
+- Run the `truffle test test`
+---
+## 📄 Description:
 
-### Mint settings
-+ `day` is constant stores the number of seconds after which the token will be unlocked from the holder (by default equals exactly one day)
-+ `allDay` is constant stores the number of `day` (exactly constant) where coins are unlocked
-+ `countMintDay` is constant stores the number of `day` (exactly constant) where owner can use mint
-+ Owner can use mint or mintArray(analogue mint for many address) 
-+ The number of coins and their distribution is regulated by the owner of the contract during `countMintDay`
+Can create rounds in which investors can buy tokens receiving them by vesting
+### Methods:
+- __deposit__ - Deposit `amount` of `token` for buy BLID.
+- __returnDeposit__ - Returns a deposit for the  `round`
+- __addToken__ - Add token and token's oracle
+- __newRound__ - Create new round. Parameters [InputNewRound](#inputnewround)
+- __finishRound__ - Finish round
+- __cancelRound__ - Cancel round
+- __getRoundStateInfromation__ - Return  [InputNewRound](Description.md#reserveliquidity)
+- __getLockedTokens__ - Returns Locked Tokens
+- __getRoundDynamicInfromation__ - Returns (all deposited money, sold tokens, open or close round)
+- __isInWhiteList__ - Return true if `account` is in white list
+- __getInvestorWallet__ - Return Investor Wallet
+- __isCancelled__ - Return true if `id` round is cancelled
+- __isParticipatedInTheRound__ - Return true if `msg.sender` is Participated In The Round
+- __getUserToken__ - Return deposited token address of `msg.sender`
+- __isFinished__ - Return true if `id` round is finished
+
+### __Structs__
+#### InputNewRound
+|Name| Type | text |
+|---|---|---|
+| _tokenRate  | uint256  |BLID/USD if type round 1, 0 if  type round 2|
+| _maxMoney  | uint256 |Amount USD when close round|
+| _sumTokens  | uint256  |Amount of selling BLID. Necessarily with the type of round 2 |
+| _startTimestamp  |  uint256 | Unix timestamp  Start Round  | 
+|  _endTimestamp |  uint256 | Unix timestamp  End Round    | 
+|  _minimumSaleAmount |  uint256 |minimum sale amount  | 
+|  _maximumSaleAmount |  uint256 |maximum sale amount  | 
+|  _duration |  uint256 | Vesting duration period | 
+|  _durationCount |  uint256 | Count of Vesting duration period | 
+|  _lockup |  uint256 | duration from end round to start vesting | 
+|  _typeRound |  uint8 |  if 1 rate set, if 2 dynamic rate, if 0 canceled round  | 
+|  _percentOnInvestorWallet |  uint8 |  percent OnI nvestor Wallet | 
+|  _burnable |  bool | if true then `_sumTokens`-selled blid burn  | 
+|  _open |  bool | if false only  account from white list can deposit  | 
+```
+ struct InputNewRound{
+        uint256 _tokenRate;
+        uint256 _maxMoney;
+        uint256 _sumTokens;
+        uint256 _startTimestamp;
+        uint256 _endTimestamp;
+        uint256 _minimumSaleAmount;
+        uint256 _maximumSaleAmount;
+        uint256 _duration;
+        uint256 _durationCount;
+        uint256 _lockup;
+        uint8 _typeRound;
+        uint8 _percentOnInvestorWallet;
+        bool _burnable;
+        bool _open;
+    }
+```

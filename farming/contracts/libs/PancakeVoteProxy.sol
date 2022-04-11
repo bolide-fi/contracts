@@ -95,7 +95,6 @@ interface IBEP20 {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
-
 contract PancakeVoterProxy {
     // SYRUP
     address public constant votes = 0x009cF7bC57584b7998236eff51b98A168DceA9B0;
@@ -105,11 +104,11 @@ contract PancakeVoterProxy {
     }
 
     function name() external pure returns (string memory) {
-        return 'SYRUPVOTE';
+        return "SYRUPVOTE";
     }
 
     function symbol() external pure returns (string memory) {
-        return 'SYRUP';
+        return "SYRUP";
     }
 
     function totalSupply() external view returns (uint256) {

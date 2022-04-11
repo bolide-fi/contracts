@@ -2,7 +2,6 @@
 
 pragma solidity ^0.8.0;
 
-
 contract Aggregator {
     function decimals() external view returns (uint8) {
         return 8;
@@ -14,12 +13,11 @@ contract Aggregator {
 }
 
 contract AggregatorN2 {
-  
     function decimals() external view returns (uint8) {
         return 8;
     }
 
     function latestAnswer() external view returns (int256 answer) {
-        return 99997069*2;
+        return 99997069 * 2;
     }
 }
