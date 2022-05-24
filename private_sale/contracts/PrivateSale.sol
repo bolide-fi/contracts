@@ -24,7 +24,8 @@ interface IBurnable {
 contract PrivateSale is Ownable {
     using SafeERC20 for IERC20;
 
-    //struct-------------------------------------------
+    //*** Structs  ***//
+
     struct Round {
         mapping(address => bool) whiteList;
         mapping(address => uint256) sums;
@@ -67,7 +68,7 @@ contract PrivateSale is Ownable {
         bool _open;
     }
 
-    //variable-----------------------------------
+    //*** Variable ***//
     mapping(uint256 => Round) rounds;
     address investorWallet;
     uint256 countRound;
@@ -79,7 +80,8 @@ contract PrivateSale is Ownable {
     address BLID;
     address expenseAddress;
 
-    //modifiers-----------------------------------
+    //*** Modifiers ***//
+
     modifier isUsedToken(address _token) {
         require(tokensAdd[_token], "Token is not used ");
         _;
@@ -94,24 +96,31 @@ contract PrivateSale is Ownable {
         require(countRound != 0 && !rounds[countRound - 1].finished, "Last round has  been finished");
         _;
     }
-
     modifier existRound(uint256 round) {
         require(round < countRound, "Number round more than Rounds count");
         _;
     }
 
-    //user function-------------------------------------------------------------
+    /*** User function ***/
+
+    /**
+     * @notice User deposit amount of token for
+     * @param amount Amount of token
+     * @param token Address of token
+     */
     function deposit(uint256 amount, address token) external isUsedToken(token) unfinishedRound {
         require(rounds[countRound - 1].open || rounds[countRound - 1].whiteList[msg.sender], "No access");
-        require(!isParticipatedInTheRound(countRound - 1), "You have already made a deposit");
+        require(!isParticipatedInTheRound(countRound - 1), "You  have already made a deposit");
         require(rounds[countRound - 1].startTimestamp < block.timestamp, "Round dont start");
         require(
-            rounds[countRound - 1].minimumSaleAmount <= amount * 10**(18 - AggregatorV3Interface(token).decimals()),
+            rounds[countRound - 1].minimumSaleAmount <=
+                amount * 10**(18 - AggregatorV3Interface(token).decimals()),
             "Minimum sale amount more than your amount"
         );
         require(
             rounds[countRound - 1].maximumSaleAmount == 0 ||
-                rounds[countRound - 1].maximumSaleAmount >= amount * 10**(18 - AggregatorV3Interface(token).decimals()),
+                rounds[countRound - 1].maximumSaleAmount >=
+                amount * 10**(18 - AggregatorV3Interface(token).decimals()),
             " Your amount more than maximum sale amount"
         );
         require(
@@ -122,20 +131,27 @@ contract PrivateSale is Ownable {
             rounds[countRound - 1].tokenRate == 0 ||
                 rounds[countRound - 1].sumTokens == 0 ||
                 rounds[countRound - 1].sumTokens >=
-                ((rounds[countRound - 1].totalReserve + amount * 10**(18 - AggregatorV3Interface(token).decimals())) *
-                    (1 ether)) /
+                ((rounds[countRound - 1].totalReserve +
+                    amount *
+                    10**(18 - AggregatorV3Interface(token).decimals())) * (1 ether)) /
                     rounds[countRound - 1].tokenRate,
             "Round is ended, all tokens sold"
         );
         require(
             rounds[countRound - 1].maxMoney == 0 ||
                 rounds[countRound - 1].maxMoney >=
-                (rounds[countRound - 1].totalReserve + amount * 10**(18 - AggregatorV3Interface(token).decimals())),
+                (rounds[countRound - 1].totalReserve +
+                    amount *
+                    10**(18 - AggregatorV3Interface(token).decimals())),
             "The round is over, the maximum required value has been reached, or your amount is greater than specified in the conditions of the round"
         );
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        rounds[countRound - 1].tokenReserve[token] += amount * 10**(18 - AggregatorV3Interface(token).decimals());
-        rounds[countRound - 1].sums[msg.sender] += amount * 10**(18 - AggregatorV3Interface(token).decimals());
+        rounds[countRound - 1].tokenReserve[token] +=
+            amount *
+            10**(18 - AggregatorV3Interface(token).decimals());
+        rounds[countRound - 1].sums[msg.sender] +=
+            amount *
+            10**(18 - AggregatorV3Interface(token).decimals());
         rounds[countRound - 1].depositToken[msg.sender] = token;
         rounds[countRound - 1].totalReserve += amount * 10**(18 - AggregatorV3Interface(token).decimals());
         rounds[countRound - 1].vestingContract.deposit(
@@ -145,10 +161,17 @@ contract PrivateSale is Ownable {
         );
     }
 
+    /**
+     * @notice User return deposit of round
+     * @param round number of round
+     */
     function returnDeposit(uint256 round) external {
         require(round < countRound, "Number round more than Rounds count");
         require(rounds[round].sums[msg.sender] > 0, "You don't have deposit or you return your deposit");
-        require(!rounds[round].finished || rounds[round].typeRound == 0, "round has been finished successfully");
+        require(
+            !rounds[round].finished || rounds[round].typeRound == 0,
+            "round has been finished successfully"
+        );
         IERC20(rounds[round].depositToken[msg.sender]).safeTransfer(
             msg.sender,
             rounds[round].sums[msg.sender] /
@@ -161,7 +184,11 @@ contract PrivateSale is Ownable {
         rounds[round].depositToken[msg.sender] = address(0);
     }
 
-    //owner functions
+    /**
+     * @notice Add token and token's oracle
+     * @param _token Address of Token
+     * @param _oracles Address of token's oracle(https://docs.chain.link/docs/binance-smart-chain-addresses/
+     */
     function addToken(address _token, address _oracles) external onlyOwner {
         require(_token != address(0) && _oracles != address(0));
         require(!tokensAdd[_token], "token was added");
@@ -170,14 +197,27 @@ contract PrivateSale is Ownable {
         tokensAdd[_token] = true;
     }
 
+    /**
+     * @notice Set Investor Wallet
+     * @param _investorWallet address of InvestorWallet
+     */
     function setInvestorWallet(address _investorWallet) external onlyOwner finishedRound {
         investorWallet = _investorWallet;
     }
 
+    /**
+     * @notice Set Expense Wallet
+     * @param _expenseAddress address of Expense Address
+     */
     function setExpenseAddress(address _expenseAddress) external onlyOwner finishedRound {
         expenseAddress = _expenseAddress;
     }
 
+    /**
+     * @notice Set Expense Wallet and Investor Wallet
+     * @param _investorWallet address of InvestorWallet
+     * @param _expenseAddress address of Expense Address
+     */
     function setExpenseAddressAndInvestorWallet(address _expenseAddress, address _investorWallet)
         external
         onlyOwner
@@ -187,15 +227,26 @@ contract PrivateSale is Ownable {
         investorWallet = _investorWallet;
     }
 
+    /**
+     * @notice Set blid in contract
+     * @param _BLID address of BLID
+     */
     function setBLID(address _BLID) external onlyOwner {
         require(BLID == address(0), "BLID was set");
         BLID = _BLID;
     }
 
+    /**
+     * @notice Creat new round with input parameters
+     * @param input Data about of new round
+     */
     function newRound(InputNewRound memory input) external onlyOwner finishedRound {
         require(BLID != address(0), "BLID is not set");
         require(expenseAddress != address(0), "Require set expense address ");
-        require(investorWallet != address(0) || input._percentOnInvestorWallet == 0, "Require set Logic contract");
+        require(
+            investorWallet != address(0) || input._percentOnInvestorWallet == 0,
+            "Require set Logic contract"
+        );
         require(
             input._endTimestamp == 0 || input._endTimestamp > block.timestamp,
             "_endTimestamp must be unset or more than now timestamp"
@@ -268,15 +319,27 @@ contract PrivateSale is Ownable {
         }
     }
 
+    /**
+     * @notice Set rate of token for last round(only for round that typy is 1)
+     * @param rate Rate token  token/usd * 10**18
+     */
     function setRateToken(uint256 rate) external onlyOwner unfinishedRound {
         require(rounds[countRound - 1].typeRound == 1, "This round auto generate rate");
         rounds[countRound - 1].tokenRate = rate;
     }
 
+    /**
+     * @notice Set timestamp when end round
+     * @param _endTimestamp timesetamp when round is ended
+     */
     function setEndTimestamp(uint256 _endTimestamp) external onlyOwner unfinishedRound {
         rounds[countRound - 1].endTimestamp = _endTimestamp;
     }
 
+    /**
+     * @notice Set Sum Tokens
+     * @param _sumTokens Amount of selling BLID. Necessarily with the type of round 2
+     */
     function setSumTokens(uint256 _sumTokens) external onlyOwner unfinishedRound {
         require(
             IERC20(BLID).balanceOf(address(this)) >= _sumTokens,
@@ -286,36 +349,63 @@ contract PrivateSale is Ownable {
         rounds[countRound - 1].sumTokens = _sumTokens;
     }
 
+    /**
+     * @notice Set  Start Timestamp
+     * @param _startTimestamp Unix timestamp  Start Round
+     */
     function setStartTimestamp(uint256 _startTimestamp) external onlyOwner unfinishedRound {
         require(block.timestamp < _startTimestamp, "Round has been started");
         rounds[countRound - 1].startTimestamp = _startTimestamp;
     }
 
+    /**
+     * @notice Set Max Money
+     * @param _maxMoney Amount USD when close round
+     */
     function setMaxMoney(uint256 _maxMoney) external onlyOwner unfinishedRound {
         require(rounds[countRound - 1].totalReserve < _maxMoney, "Now total reserve more than _maxMoney");
         rounds[countRound - 1].maxMoney = _maxMoney;
     }
 
+    /**
+     * @notice Add account in white list
+     * @param account Address is added in white list
+     */
     function addWhiteList(address account) external onlyOwner unfinishedRound {
         rounds[countRound - 1].whiteList[account] = true;
     }
 
+    /**
+     * @notice Add accounts in white list
+     * @param accounts Addresses are added in white list
+     */
     function addWhiteListByArray(address[] calldata accounts) external onlyOwner unfinishedRound {
         for (uint256 i = 0; i < accounts.length; i++) {
             rounds[countRound - 1].whiteList[accounts[i]] = true;
         }
     }
 
+    /**
+     * @notice Delete accounts in white list
+     * @param account Address is deleted in white list
+     */
     function deleteWhiteList(address account) external onlyOwner unfinishedRound {
         rounds[countRound - 1].whiteList[account] = false;
     }
 
+    /**
+     * @notice Delete accounts in white list
+     * @param accounts Addresses are  deleted in white list
+     */
     function deleteWhiteListByArray(address[] calldata accounts) external onlyOwner unfinishedRound {
         for (uint256 i = 0; i < accounts.length; i++) {
             rounds[countRound - 1].whiteList[accounts[i]] = false;
         }
     }
 
+    /**
+     * @notice Finish round, send rate to VestingGroup contracts
+     */
     function finishRound() external onlyOwner {
         require(countRound != 0 && !rounds[countRound - 1].finished, "Last round has been finished");
         uint256[] memory rates = new uint256[](countTokens);
@@ -347,7 +437,10 @@ contract PrivateSale is Ownable {
                 rates[i] = (rounds[countRound - 1].sumTokens * rates[i]) / sumUSD;
         }
         if (sumUSD != 0) {
-            rounds[countRound - 1].vestingContract.finishRound(block.timestamp + rounds[countRound - 1].lockup, rates);
+            rounds[countRound - 1].vestingContract.finishRound(
+                block.timestamp + rounds[countRound - 1].lockup,
+                rates
+            );
             if (rounds[countRound - 1].typeRound == 1)
                 IERC20(BLID).safeTransfer(
                     address(rounds[countRound - 1].vestingContract),
@@ -370,12 +463,19 @@ contract PrivateSale is Ownable {
         rounds[countRound - 1].finished = true;
     }
 
+    /**
+     * @notice Cancel round
+     */
     function cancelRound() external onlyOwner {
         require(countRound != 0 && !rounds[countRound - 1].finished, "Last round has been finished");
         rounds[countRound - 1].finished = true;
         rounds[countRound - 1].typeRound = 0;
     }
 
+    /**
+     * @param id Number of round
+     * @return InputNewRound - information about round
+     */
     function getRoundStateInfromation(uint256 id) public view returns (InputNewRound memory) {
         InputNewRound memory out = InputNewRound(
             rounds[id].tokenRate,
@@ -396,11 +496,19 @@ contract PrivateSale is Ownable {
         return out;
     }
 
+    /**
+     * @param id Number of round
+     * @return  Locked Tokens
+     */
     function getLockedTokens(uint256 id) public view returns (uint256) {
         if (rounds[id].tokenRate == 0) return 0;
         return ((rounds[id].totalReserve * (1 ether)) / rounds[id].tokenRate);
     }
 
+    /**
+     * @param id Number of round
+     * @return  Returns (all deposited money, sold tokens, open or close round)
+     */
     function getRoundDynamicInfromation(uint256 id)
         public
         view
@@ -417,38 +525,77 @@ contract PrivateSale is Ownable {
         }
     }
 
+    /**
+     * @return  True if `account`  is in white list
+     */
     function isInWhiteList(address account) public view returns (bool) {
         return rounds[countRound - 1].whiteList[account];
     }
 
+    /**
+     * @return  Count round
+     */
     function getCountRound() public view returns (uint256) {
         return countRound;
     }
 
+    /**
+     * @param id Number of round
+     * @return  Address Vesting contract
+     */
     function getVestingAddress(uint256 id) public view existRound(id) returns (address) {
         return address(rounds[id].vestingContract);
     }
 
-    function getInvestorDepositedTokens(uint256 id, address account) public view existRound(id) returns (uint256) {
+    /**
+     * @param id Number of round
+     * @param account Address of depositor
+     * @return  Investor Deposited Tokens
+     */
+    function getInvestorDepositedTokens(uint256 id, address account)
+        public
+        view
+        existRound(id)
+        returns (uint256)
+    {
         return (rounds[id].sums[account]);
     }
 
+    /**
+     * @return  Investor Deposited Tokens
+     */
     function getInvestorWallet() public view returns (address) {
         return investorWallet;
     }
 
+    /**
+     * @param id Number of round
+     * @return   True if `id` round is cancelled
+     */
     function isCancelled(uint256 id) public view existRound(id) returns (bool) {
         return rounds[id].typeRound == 0;
     }
 
+    /**
+     * @param id Number of round
+     * @return True if `msg.sender`  is Participated In The Round
+     */
     function isParticipatedInTheRound(uint256 id) public view existRound(id) returns (bool) {
         return rounds[id].depositToken[msg.sender] != address(0);
     }
 
+    /**
+     * @param id Number of round
+     * @return Deposited token addres of `msg.sender`
+     */
     function getUserToken(uint256 id) public view existRound(id) returns (address) {
         return rounds[id].depositToken[msg.sender];
     }
 
+    /**
+     * @param id Number of round
+     * @return True if `id` round  is finished
+     */
     function isFinished(uint256 id) public view returns (bool) {
         return rounds[id].finished;
     }

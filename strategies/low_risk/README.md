@@ -27,7 +27,7 @@ Provides manage depositors tokens ability to admin (oracle) strategy
 - E6 - blid is already set
 - E7 - storage is already set
 
-### __StorageV0.sol__
+### __Storage.sol__
 
 This contract is upgradable. Interacts with users, distributes earned BLID, and associates with Logic contract.
 
@@ -38,4 +38,58 @@ This contract is upgradable. Interacts with users, distributes earned BLID, and 
 - E4 - withdraw amount exceeds balance
 - E5 - contracrt hasn't enough for interest fee, please contact the administrator
 - E6 - token is already added
-- E7 - iterate more than you can iterate
+- E7 - You can call updateAccumulatedRewardsPerShare one time for token
+
+---
+## Interactions
+
+![image info](./diagram.jpg "Interactions")
+---
+## BLID distribution model
+Bolide Low risk Strategy distribute all earned income once X hours (often it is about 6 times a day). Users can deposit their assets and withdraw at any moment regardless of distribution schedule. To support it Bolide’s strategies use following algorithm
+
+Let’s say we have:
+
+User 1 (U1) at time moment 1 (T1) deposited 2 USD (A1)
+User 2 (U2) at moment  2 (T2) deposited 2 USD (A2)
+The strategy made rewards distribution at moment 3 (t3) with 1 BLID distribution (B1)
+The goal is to make an honest distribution 1 BLID between 2 users, the amounts of rewards should depend on the time before distribution and amount of users deposit.
+
+Let's say “Dollar Time” means the amount of deposit multiplied to the time between deposit and distribution
+
+$$DollarTime(u) = A(U) * \bigtriangleup T$$
+
+For example 
+$$DollarTime(U_1) = A(U) * ΔT = A_1 * (T_3 - T_1) = A_1 * T_3 - A_1 * T_1 = 2 * 3 - 2 * 1 = 4$$
+$$DollarTime(U_2) = A(U) * ΔT = A_2 * (T_3 - T_2) = A_2 * T_3 - A_2 * T_2 = 2 * 3 - 2 * 2 = 2$$
+
+Then “Total Dollar time“
+
+$$TotalDollarTime(U) = \sum_{n}^{1}DollarTime(Ui)$$
+
+Then “Dollar Time Distribution” means how much BLID should be distributed per 1 DollarTime.
+
+$$DollarTimeDistribution(U) = \frac{B}{TotalDollarTime}$$
+
+For our example
+
+$$DollarTimeDistribution(T_3) = \frac{1}{(2+4)} = \frac{1}{6}$$
+
+Or we can calculate DollarTimeDistribution as follows 
+
+$$DollarTimeDistribution(T) = \frac{B}{\sum_iAi*T-\sum_iAi*Ti}$$
+
+Then
+
+$$DollarTimeDistribution(T_3) = \frac{B_1}{(A_1 * T_3 + A_2 * T_3) - (A_1 * T_1 + A_2 * T_2)} = \frac{1}{4 * 3 - (2 * 1  + 2 * 2)} = \frac{1}{6}$$
+
+After that, we can calculate user’s rewards as follows
+
+$$Rewards(U_i) = DollarTimeDistribution(T) * DollarTime(U_i) = DollarTimeDistribution(T) * (A_i * T_d - A_i * T_i)$$
+
+So we have 
+
+$$Rewards(U_1) = \frac{1}{6} * (2 * 3 - 2 * 1) = \frac{2}{3}$$
+$$Rewards(U_2) = \frac{1}{6} * (2 * 3 - 2 * 2) = \frac{1}{3}$$
+
+It's obvious that if user withdraw some amount of deposit than we should use Ai with “-” sign in all calculations

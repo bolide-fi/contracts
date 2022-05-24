@@ -1,8 +1,11 @@
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+
+import "./Timelock.sol";
 
 interface IMigratorChef {
     function migrate(IERC20 token) external returns (IERC20);
@@ -46,6 +49,8 @@ contract MasterBlid is Ownable {
     uint256 public BONUS_MULTIPLIER = 1;
     // The migrator contract. It has a lot of power. Can only be set through governance (owner).
     IMigratorChef public migrator;
+    // Timelock contract address
+    Timelock public timelock;
 
     // Info of each pool.
     PoolInfo[] public poolInfo;
@@ -67,19 +72,30 @@ contract MasterBlid is Ownable {
         address _blid,
         address _expenseAddress,
         uint256 _blidPerBlock,
-        uint256 _startBlock
+        uint256 _startBlock,
+        uint256 _timelockDelay
     ) public {
         blid = IERC20(_blid);
         expenseAddress = _expenseAddress;
         blidPerBlock = _blidPerBlock;
         startBlock = _startBlock;
 
+        Timelock _timelock = new Timelock(msg.sender, _timelockDelay);
+        timelock = _timelock;
+
         // staking pool
         poolInfo.push(
-            PoolInfo({ lpToken: IERC20(_blid), allocPoint: 1000, lastRewardBlock: startBlock, accBlidPerShare: 0 })
+            PoolInfo({
+                lpToken: IERC20(_blid),
+                allocPoint: 1000,
+                lastRewardBlock: startBlock,
+                accBlidPerShare: 0
+            })
         );
 
         totalAllocPoint = 1000;
+
+        transferOwnership(address(timelock));
     }
 
     function updateMultiplier(uint256 multiplierNumber) external onlyOwner {
@@ -121,12 +137,13 @@ contract MasterBlid is Ownable {
     ) external onlyOwner {
         if (_withUpdate) {
             massUpdatePools();
+        } else {
+            updatePool(_pid);
         }
         uint256 prevAllocPoint = poolInfo[_pid].allocPoint;
         if (prevAllocPoint != _allocPoint) {
             poolInfo[_pid].allocPoint = _allocPoint;
             totalAllocPoint = totalAllocPoint - prevAllocPoint + _allocPoint;
-            updatePool(_pid);
         }
     }
 

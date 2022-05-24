@@ -46,7 +46,7 @@ contract Timelock {
     );
 
     uint public constant GRACE_PERIOD = 14 days;
-    uint public constant MINIMUM_DELAY = 6 hours;
+    uint public constant MINIMUM_DELAY = 1 hours;
     uint public constant MAXIMUM_DELAY = 30 days;
 
     address public admin;
@@ -98,6 +98,7 @@ contract Timelock {
         emit NewPendingAdmin(pendingAdmin);
     }
 
+    // Queue new transaction for executing with delay.
     function queueTransaction(
         address target,
         uint value,
@@ -118,6 +119,7 @@ contract Timelock {
         return txHash;
     }
 
+    // Cancel queued transaction.
     function cancelTransaction(
         address target,
         uint value,
@@ -133,6 +135,7 @@ contract Timelock {
         emit CancelTransaction(txHash, target, value, signature, data, eta);
     }
 
+    // Execute queued transaction if it is ready by conditions.
     function executeTransaction(
         address target,
         uint value,
@@ -144,8 +147,14 @@ contract Timelock {
 
         bytes32 txHash = keccak256(abi.encode(target, value, signature, data, eta));
         require(queuedTransactions[txHash], "Timelock::executeTransaction: Transaction hasn't been queued.");
-        require(getBlockTimestamp() >= eta, "Timelock::executeTransaction: Transaction hasn't surpassed time lock.");
-        require(getBlockTimestamp() <= eta.add(GRACE_PERIOD), "Timelock::executeTransaction: Transaction is stale.");
+        require(
+            getBlockTimestamp() >= eta,
+            "Timelock::executeTransaction: Transaction hasn't surpassed time lock."
+        );
+        require(
+            getBlockTimestamp() <= eta.add(GRACE_PERIOD),
+            "Timelock::executeTransaction: Transaction is stale."
+        );
 
         queuedTransactions[txHash] = false;
 

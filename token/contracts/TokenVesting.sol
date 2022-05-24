@@ -25,6 +25,11 @@ contract TokenVesting {
      * @dev Creates a vesting contract that vests its balance of any ERC20 token to the
      * beneficiary. By then all
      * of the balance will have vested.
+     * @param tokenValue Address of vesting token
+     * @param beneficiaryValue Address of beneficiary
+     * @param startTimestampValue Timstamp when start vesting
+     * @param durationValue Duration one period of vesit
+     * @param durationCountValue Count duration one period of vesit
      */
     constructor(
         address tokenValue,

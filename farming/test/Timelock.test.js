@@ -62,24 +62,29 @@ contract('Timelock', ([alice, bob, carol, dev, minter]) => {
     it('should also work with MasterBlid', async () => {
         this.lp1 = await MockBEP20.new('LPToken', 'LP', '10000000000', { from: minter });
         this.lp2 = await MockBEP20.new('LPToken', 'LP', '10000000000', { from: minter });
-        this.chef = await MasterBlid.new(this.blid.address, minter, '1000', '100', { from: alice });
+        this.chef = await MasterBlid.new(this.blid.address, minter, '1000', '100', '28800', { from: alice });
+        let timelock = await Timelock.at(await this.chef.timelock());
+        assert.equal(await this.chef.owner(), timelock.address);
+        assert.equal(await timelock.admin(), alice);
         await this.blid.transferOwnership(this.chef.address, { from: alice });
-        await this.chef.add('100', this.lp1.address, true, { from: alice });
-        await this.chef.transferOwnership(this.timelock.address, { from: alice });
+        await expectRevert(
+            this.chef.transferOwnership(alice, { from: alice }),
+            "revert Ownable: caller is not the owner",
+        );
         await expectRevert(
             this.chef.add('100', this.lp1.address, true, { from: alice }),
             "revert Ownable: caller is not the owner",
         );
 
         const eta = (await time.latest()).add(time.duration.hours(9));
-        await this.timelock.queueTransaction(
+        await timelock.queueTransaction(
             this.chef.address, '0', 'transferOwnership(address)',
-            encodeParameters(['address'], [minter]), eta, { from: bob },
+            encodeParameters(['address'], [minter]), eta, { from: alice },
         );
         await time.increase(time.duration.hours(9));
-        await this.timelock.executeTransaction(
+        await timelock.executeTransaction(
             this.chef.address, '0', 'transferOwnership(address)',
-            encodeParameters(['address'], [minter]), eta, { from: bob },
+            encodeParameters(['address'], [minter]), eta, { from: alice },
         );
         await expectRevert(
             this.chef.add('100', this.lp1.address, true, { from: alice }),

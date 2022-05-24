@@ -1,19 +1,27 @@
-const { contract, accounts } = require('@openzeppelin/test-environment');
+const { contract, accounts, web3 } = require('@openzeppelin/test-environment');
 const { time } = require('@openzeppelin/test-helpers');
 
 const [owner, logicContract, Alexander, Dmitry, Victor] = accounts;
 
 const Usdt = contract.fromArtifact("ERC20");
-const Storage = contract.fromArtifact("StorageV0");
+const Storage = contract.fromArtifact("StorageV2");
 const Aggregator = contract.fromArtifact("Aggregator");
 const AggregatorN2 = contract.fromArtifact("AggregatorN2");
+
+const TokenDistributionModel = require("./utils/TokenDistributionModel")
+
+
+async function getTimestampTransaction(transaction) {
+  return (await web3.eth.getBlock(transaction.receipt.blockHash)).timestamp
+}
 
 require('chai')
   .use(require('chai-as-promised'))
   .should()
 describe('Storage', () => {
-  let blid, usdt, storage, aggregator, startTime
+  let blid, usdt, storage, aggregator, startTime, model, transationTime
   before(async () => {
+    model = new TokenDistributionModel()
     aggregator = await Aggregator.new()
     blid = await Usdt.new("some erc20 as if BLID", "SERC", { from: logicContract })
     usdt = await Usdt.new("some erc20", "SERC", { from: owner })
@@ -63,7 +71,7 @@ describe('Storage', () => {
   })
   describe('standart scence', async () => {
 
-    it('can not use deposit unknown token addres', async () => {
+    it('can not use deposit unknown token address', async () => {
       storage.deposit(1000, accounts[6], { from: Alexander }).should.be.rejectedWith(`Returned error: VM Exception while processing transaction: revert E1 -- Reason given: E1.`)
     })
 
@@ -74,12 +82,14 @@ describe('Storage', () => {
     it('deposit', async () => {
       await usdt.approve(storage.address, web3.utils.toWei('1', 'micro'), { from: Alexander })
       startTime = (await time.latest())
-      await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       startTime = startTime.add(time.duration.hours(300))
       await time.increaseTo(startTime)
 
       await usdt.approve(storage.address, web3.utils.toWei('1', 'micro'), { from: Dmitry })
-      await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Dmitry }))
+      model.deposit(Dmitry, Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
 
       balance = await storage.balanceOf(Alexander)
       assert.equal(balance.toString(), "999970690000");
@@ -117,36 +127,44 @@ describe('Storage', () => {
       await blid.approve(storage.address, web3.utils.toWei('2', 'micro'), { from: logicContract })
       startTime = startTime.add(time.duration.hours(100))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       balance = await storage.balanceEarnBLID(Dmitry)
-      assert.equal(balance.toString(), "200000000000");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Dmitry)), 10 ** 3)
       balance = await storage.balanceEarnBLID(Alexander)
-      assert.equal(balance.toString(), "800000000000");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Alexander)), 10 ** 3)
     })
 
     it('second add earn', async () => {
       await usdt.approve(storage.address, web3.utils.toWei('1', 'micro'), { from: Victor })
       startTime = startTime.add(time.duration.hours(100))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Victor })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Victor }))
+      model.deposit(Victor, Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       startTime = startTime.add(time.duration.hours(100))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       balance = await storage.balanceEarnBLID(Dmitry)
-      assert.equal(balance.toString(), "600000000000");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Dmitry)), 10 ** 3)
       balance = await storage.balanceEarnBLID(Victor)
-      assert.equal(balance.toString(), "200000000000");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Victor)), 10 ** 3)
       balance = await storage.balanceEarnBLID(Alexander)
-      assert.equal(balance.toString(), "1200000000000");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Alexander)), 10 ** 3)
     })
 
     it('take earn', async () => {
       await storage.interestFee({ from: Dmitry })
       await storage.interestFee({ from: Victor })
+      model.claim(Dmitry)
+      model.claim(Victor)
+      balance = await blid.balanceOf(Victor);
+
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getBalance(Victor)), 10 ** 3);
+
       balance = await blid.balanceOf(Dmitry);
-      assert.equal(balance.toString(), "600000000000");
-      balance = await blid.balanceOf(Dmitry);
-      assert.equal(balance.toString(), "600000000000");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getBalance(Dmitry)), 10 ** 3);
+
       balance = await storage.balanceEarnBLID(Dmitry)
       assert.equal(balance.toString(), "0");
     })
@@ -172,14 +190,13 @@ describe('Storage', () => {
       assert.equal(balance.toString(), "999970690000");
       balance = await usdt.balanceOf(storage.address);
       assert.equal(balance.toString(), "3000000000000");
-      await storage.withdraw(3000, usdt.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.withdraw(3000, usdt.address, { from: Dmitry }))
       balance = await usdt.balanceOf(Dmitry);
       assert.equal(balance.toString(), "999999000000003000");
       balance = await storage.balanceOf(Dmitry)
       assert.equal(balance.toString(), "999970687000");
       balance = await usdt.balanceOf(storage.address);
       assert.equal(balance.toString(), "2999999997000");
-      1199999888887
     })
 
     it('add earn', async () => {
@@ -187,17 +204,19 @@ describe('Storage', () => {
       await blid.approve(storage.address, web3.utils.toWei('2', 'micro'), { from: logicContract })
       startTime = startTime.add(time.duration.seconds(100))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       balance = await storage.balanceEarnBLID(Dmitry)
-      assert.equal(balance.toString(), "333333333333");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Dmitry)), 10 ** 3);
       balance = await storage.balanceEarnBLID(Alexander)
-      assert.equal(balance.toString(), "1533333333333");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Alexander)), 10 ** 3);
     })
   })
 
 
   describe('small seconds scence', async () => {
     before(async () => {
+      model = new TokenDistributionModel()
       aggregator = await Aggregator.new()
       blid = await Usdt.new("some erc20 as if BLID", "SERC", { from: logicContract })
       usdt = await Usdt.new("some erc20", "SERC", { from: owner })
@@ -220,14 +239,16 @@ describe('Storage', () => {
     it('deposit', async () => {
       await usdt.approve(storage.address, web3.utils.toWei('1', 'micro'), { from: Alexander })
       startTime = (await time.latest())
-      startTime = startTime.add(time.duration.seconds(10))
+      startTime = startTime.add(time.duration.seconds(20))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       startTime = startTime.add(time.duration.seconds(30))
 
       await usdt.approve(storage.address, web3.utils.toWei('1', 'micro'), { from: Dmitry })
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Dmitry }))
+      model.deposit(Dmitry, Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
 
       balance = await storage.balanceOf(Alexander)
       assert.equal(balance.toString(), "999970690000");
@@ -243,16 +264,18 @@ describe('Storage', () => {
       await blid.approve(storage.address, web3.utils.toWei('2', 'micro'), { from: logicContract })
       startTime = startTime.add(time.duration.seconds(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       balance = await storage.balanceEarnBLID(Dmitry)
-      assert.equal(balance.toString(), "200000000000");  // this depends on time
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Dmitry)), 10000)
       balance = await storage.balanceEarnBLID(Alexander)
-      assert.equal(balance.toString(), "800000000000");  // this depends on time
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Alexander)), 10000)
     })
   })
 
   describe('small seconds scence', async () => {
     before(async () => {
+      model = new TokenDistributionModel()
       aggregator = await Aggregator.new()
       blid = await Usdt.new("some erc20 as if BLID", "SERC", { from: logicContract })
       usdt = await Usdt.new("some erc20", "SERC", { from: owner })
@@ -276,12 +299,14 @@ describe('Storage', () => {
       startTime = (await time.latest())
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       startTime = startTime.add(time.duration.hours(30))
 
       await usdt.approve(storage.address, web3.utils.toWei('2', 'micro'), { from: Dmitry })
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Dmitry }))
+      model.deposit(Dmitry, Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
 
 
       balance = await storage.balanceOf(Alexander)
@@ -298,17 +323,20 @@ describe('Storage', () => {
       await blid.approve(storage.address, web3.utils.toWei('2', 'micro'), { from: logicContract })
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       balance = await storage.balanceEarnBLID(Dmitry)
-      assert.equal(balance.toString(), "333333333333");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Dmitry)), 10 ** 3)
+
       balance = await storage.balanceEarnBLID(Alexander)
-      assert.equal(balance.toString(), "666666666666");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Alexander)), 10 ** 3)
     })
   })
 
 
   describe('new token', async () => {
     before(async () => {
+      model = new TokenDistributionModel()
       aggregator = await Aggregator.new()
       aggregatorN2 = await AggregatorN2.new()
       blid = await Usdt.new("some erc20 as if BLID", "SERC", { from: logicContract })
@@ -346,14 +374,16 @@ describe('Storage', () => {
       startTime = (await time.latest())
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       startTime = startTime.add(time.duration.hours(30))
     })
 
     it('deposit', async () => {
       await usdtn2.approve(storage.address, web3.utils.toWei('2', 'micro'), { from: Dmitry })
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('1', 'micro'), usdtn2.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('1', 'micro'), usdtn2.address, { from: Dmitry }))
+      model.deposit(Dmitry, Number.parseInt(web3.utils.toWei('1', 'micro')) * 2, transationTime)
 
       balance = await storage.balanceOf(Alexander)
       assert.equal(balance.toString(), "999970690000");
@@ -368,17 +398,20 @@ describe('Storage', () => {
       await blid.approve(storage.address, web3.utils.toWei('2', 'micro'), { from: logicContract })
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       balance = await storage.balanceEarnBLID(Dmitry)
-      assert.equal(balance.toString(), "333333333333");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Dmitry)), 10 ** 3)
+
       balance = await storage.balanceEarnBLID(Alexander)
-      assert.equal(balance.toString(), "666666666666");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Alexander)), 10 ** 3)
     })
   })
 
 
   describe('double deposit', async () => {
     before(async () => {
+      model = new TokenDistributionModel()
       aggregator = await Aggregator.new()
       blid = await Usdt.new("some erc20 as if BLID", "SERC", { from: logicContract })
       usdt = await Usdt.new("some erc20", "SERC", { from: owner })
@@ -404,10 +437,12 @@ describe('Storage', () => {
       startTime = (await time.latest())
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Dmitry }))
+      model.deposit(Dmitry, Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
     })
 
     it('first add earn', async () => {
@@ -415,29 +450,33 @@ describe('Storage', () => {
       await blid.approve(storage.address, web3.utils.toWei('10', 'micro'), { from: logicContract })
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
     })
 
     it('second deposit', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
       balance = await storage.balanceEarnBLID(Alexander)
     })
 
     it('second add earn', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
       balance = await storage.balanceEarnBLID(Dmitry)
-      assert.equal(balance.toString(), "1000000000000");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Dmitry)), 10 ** 3)
       balance = await storage.balanceEarnBLID(Alexander)
-      assert.equal(balance.toString(), "1500000000000");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Alexander)), 10 ** 3)
     })
   })
 
   describe('deposit all withdraw addEarn interestFee', async () => {
     before(async () => {
+      model = new TokenDistributionModel()
       aggregator = await Aggregator.new()
       blid = await Usdt.new("some erc20 as if BLID", "SERC", { from: logicContract })
       usdt = await Usdt.new("some erc20", "SERC", { from: owner })
@@ -461,16 +500,20 @@ describe('Storage', () => {
       startTime = (await time.latest())
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Dmitry }))
+      model.deposit(Dmitry, Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
 
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.withdraw(web3.utils.toWei('1', 'micro'), usdt.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.withdraw(web3.utils.toWei('1', 'micro'), usdt.address, { from: Dmitry }))
+      model.deposit(Dmitry, -Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
 
       balance = await blid.balanceOf(Dmitry)
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getBalance(Dmitry)), 10 ** 3)
       assert.equal(balance.toString(), "0");
     })
 
@@ -479,15 +522,19 @@ describe('Storage', () => {
       await blid.approve(storage.address, web3.utils.toWei('10', 'micro'), { from: logicContract })
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       await storage.interestFee({ from: Alexander })
+      model.claim(Alexander)
       balance = await blid.balanceOf(Alexander)
-      assert.equal(balance.toString(), "666666666666");  // this depends on time
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getBalance(Alexander)), 10 ** 3)
+      assert.closeTo(Number.parseInt(balance.toString()), 666666666666, 7000000);
     })
   })
 
   describe('zero deposit one add earn', async () => {
     before(async () => {
+      model = new TokenDistributionModel()
       aggregator = await Aggregator.new()
       blid = await Usdt.new("some erc20 as if BLID", "SERC", { from: logicContract })
       usdt = await Usdt.new("some erc20", "SERC", { from: owner })
@@ -515,8 +562,9 @@ describe('Storage', () => {
     })
   })
 
-  describe('two deposit one earn', async () => {
+  describe('two deposit one earn ', async () => {
     before(async () => {
+      model = new TokenDistributionModel()
       aggregator = await Aggregator.new()
       blid = await Usdt.new("some erc20 as if BLID", "SERC", { from: logicContract })
       usdt = await Usdt.new("some erc20", "SERC", { from: owner })
@@ -542,10 +590,12 @@ describe('Storage', () => {
       startTime = (await time.latest())
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Dmitry }))
+      model.deposit(Dmitry, Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
     })
 
     it('first add earn', async () => {
@@ -553,20 +603,23 @@ describe('Storage', () => {
       await blid.approve(storage.address, web3.utils.toWei('10', 'micro'), { from: logicContract })
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
     })
 
     it('second deposit', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
       balance = await blid.balanceOf(Alexander)
-      assert.equal(balance.toString(), "500000000000");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getBalance(Alexander)), 10 ** 3)
     })
   })
 
   describe('deposit withdraw addEarn interestFee', async () => {
     before(async () => {
+      model = new TokenDistributionModel()
       aggregator = await Aggregator.new()
       blid = await Usdt.new("some erc20 as if BLID", "SERC", { from: logicContract })
       usdt = await Usdt.new("some erc20", "SERC", { from: owner })
@@ -591,14 +644,17 @@ describe('Storage', () => {
       startTime = (await time.latest())
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('1', 'micro'), usdt.address, { from: Dmitry }))
+      model.deposit(Dmitry, Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
 
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.withdraw(web3.utils.toWei('0.5', 'micro'), usdt.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.withdraw(web3.utils.toWei('0.5', 'micro'), usdt.address, { from: Dmitry }))
+      model.deposit(Dmitry, -Number.parseInt(web3.utils.toWei('0.5', 'micro')), transationTime)
 
       balance = await blid.balanceOf(Dmitry)
       assert.equal(balance.toString(), "0");
@@ -609,15 +665,18 @@ describe('Storage', () => {
       await blid.approve(storage.address, web3.utils.toWei('10', 'micro'), { from: logicContract })
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
       await storage.interestFee({ from: Alexander })
+      model.claim(Alexander)
       balance = await blid.balanceOf(Alexander)
-      assert.equal(balance.toString(), "615384615384");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getBalance(Alexander)), 10 ** 3)
     })
   })
 
   describe('many deposit', async () => {
     before(async () => {
+      model = new TokenDistributionModel()
       aggregator = await Aggregator.new()
       aggregatorn2 = await AggregatorN2.new()
       blid = await Usdt.new("some erc20 as if BLID", "SERC", { from: logicContract })
@@ -660,7 +719,8 @@ describe('Storage', () => {
       await time.increaseTo(startTime)
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
     })
 
     it('first add earn', async () => {
@@ -668,78 +728,90 @@ describe('Storage', () => {
       await blid.approve(storage.address, web3.utils.toWei('10', 'micro'), { from: logicContract })
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('1', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('1', 'micro')), transationTime)
     })
 
     it('deposit', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdc.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdc.address, { from: Dmitry }))
+      model.deposit(Dmitry, Number.parseInt(web3.utils.toWei('2', 'micro')) * 2, transationTime)
     })
 
     it('deposit', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
       balance = await storage.balanceEarnBLID(Alexander)
     })
 
     it('add earn', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract })
-
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
     })
 
     it('deposit', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
     })
 
     it('deposit', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdc.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdc.address, { from: Dmitry }))
+      model.deposit(Dmitry, Number.parseInt(web3.utils.toWei('2', 'micro') * 2), transationTime)
     })
 
     it('add earn', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
     })
 
     it('deposit', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdc.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdc.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('2', 'micro') * 2), transationTime)
     })
 
     it('deposit', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Dmitry }))
+      model.deposit(Dmitry, Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
       balance = await storage.balanceEarnBLID(Alexander)
     })
 
     it('add earn', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
     })
 
     it('claim', async () => {
       await storage.interestFee({ from: Dmitry })
       await storage.interestFee({ from: Alexander })
+      model.claim(Dmitry)
+      model.claim(Alexander)
       balance = await blid.balanceOf(Alexander)
-      assert.closeTo(Number.parseInt(balance.toString()), 4000000000000, 1);
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getBalance(Alexander)), 10 ** 3)
       balance = await blid.balanceOf(Dmitry)
-      assert.closeTo(Number.parseInt(balance.toString()), 3000000000000, 1);
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getBalance(Dmitry)), 10 ** 3)
     })
   })
 
   describe('many deposit', async () => {
     before(async () => {
+      model = new TokenDistributionModel()
       aggregator = await Aggregator.new()
       aggregatorn2 = await AggregatorN2.new()
       blid = await Usdt.new("some erc20 as if BLID", "SERC", { from: logicContract })
@@ -780,7 +852,8 @@ describe('Storage', () => {
       startTime = (await time.latest())
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
     })
 
     it('first add earn', async () => {
@@ -788,25 +861,28 @@ describe('Storage', () => {
       await blid.approve(storage.address, web3.utils.toWei('10', 'micro'), { from: logicContract })
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
     })
 
     it('deposit', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdc.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdc.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('2', 'micro') * 2), transationTime)
     })
 
     it('add earn', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
 
     })
 
     it('claim', async () => {
       balance = await storage.balanceEarnBLID(Alexander)
-      assert.equal(balance.toString(), "2000000000000");
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getEarn(Alexander)), 10 ** 3)
       balance = await storage.balanceEarnBLID(Dmitry)
       assert.equal(balance.toString(), "0");
       await storage.interestFee({ from: Dmitry })
@@ -816,6 +892,7 @@ describe('Storage', () => {
 
   describe('deposit addEarn withdraw', async () => {
     before(async () => {
+      model = new TokenDistributionModel()
       aggregator = await Aggregator.new()
       aggregatorn2 = await AggregatorN2.new()
       blid = await Usdt.new("some erc20 as if BLID", "SERC", { from: logicContract })
@@ -855,13 +932,15 @@ describe('Storage', () => {
       startTime = (await time.latest())
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
     })
 
     it('deposit', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('4', 'micro'), usdt.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('4', 'micro'), usdt.address, { from: Dmitry }))
+      model.deposit(Dmitry, Number.parseInt(web3.utils.toWei('4', 'micro')), transationTime)
     })
 
     it('first add earn', async () => {
@@ -869,65 +948,74 @@ describe('Storage', () => {
       await blid.approve(storage.address, web3.utils.toWei('10', 'micro'), { from: logicContract })
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
     })
 
     it('deposit', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('4', 'micro'), usdc.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('4', 'micro'), usdc.address, { from: Alexander }))
+      model.deposit(Alexander, Number.parseInt(web3.utils.toWei('4', 'micro') * 2), transationTime)
     })
 
     it('deposit', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.deposit(web3.utils.toWei('4', 'micro'), usdc.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.deposit(web3.utils.toWei('4', 'micro'), usdc.address, { from: Dmitry }))
+      model.deposit(Dmitry, Number.parseInt(web3.utils.toWei('4', 'micro') * 2), transationTime)
     })
 
     it('add earn', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
     })
 
     it(' withdraw', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.withdraw(web3.utils.toWei('2', 'micro'), usdc.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.withdraw(web3.utils.toWei('2', 'micro'), usdc.address, { from: Alexander }))
+      model.deposit(Alexander, -Number.parseInt(web3.utils.toWei('2', 'micro') * 2), transationTime)
     })
 
     it('add earn', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract })
+      transationTime = await getTimestampTransaction(await storage.addEarn(web3.utils.toWei('2', 'micro'), { from: logicContract }))
+      model.distribute(Number.parseInt(web3.utils.toWei('2', 'micro')), transationTime)
     })
 
     it(' withdraw', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.withdraw(web3.utils.toWei('2', 'micro'), usdc.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.withdraw(web3.utils.toWei('2', 'micro'), usdc.address, { from: Alexander }))
+      model.deposit(Alexander, -Number.parseInt(web3.utils.toWei('2', 'micro') * 2), transationTime)
     })
 
     it(' withdraw', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.withdraw(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander })
+      transationTime = await getTimestampTransaction(await storage.withdraw(web3.utils.toWei('2', 'micro'), usdt.address, { from: Alexander }))
     })
 
     it(' withdraw', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.withdraw(web3.utils.toWei('4', 'micro'), usdc.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.withdraw(web3.utils.toWei('4', 'micro'), usdc.address, { from: Dmitry }))
+      model.deposit(Dmitry, -Number.parseInt(web3.utils.toWei('4', 'micro') * 2), transationTime)
     })
 
     it(' withdraw', async () => {
       startTime = startTime.add(time.duration.hours(10))
       await time.increaseTo(startTime)
-      await storage.withdraw(web3.utils.toWei('4', 'micro'), usdt.address, { from: Dmitry })
+      transationTime = await getTimestampTransaction(await storage.withdraw(web3.utils.toWei('4', 'micro'), usdt.address, { from: Dmitry }))
+      model.deposit(Dmitry, -Number.parseInt(web3.utils.toWei('4', 'micro')), transationTime)
       balance = await blid.balanceOf(Alexander)
-      assert.equal(balance.toString(), "2847619047618");  // this depends on time
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getBalance(Alexander)), 10 ** 3)
       balance = await blid.balanceOf(Dmitry)
-      assert.equal(balance.toString(), "3152380952380");  // this depends on time
+      assert.closeTo(Number.parseInt(balance.toString()), Math.floor(model.getBalance(Dmitry)), 10 ** 3)
     })
   })
 });

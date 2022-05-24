@@ -23,7 +23,7 @@ contract VestingController is Ownable {
     IERC20 blid;
 
     /**
-     * @dev Returns the start timestamp day when create contract
+     * @return The start timestamp day when create contract
      */
     function timestampCreated() public view returns (uint256) {
         return _timestampCreated;
@@ -31,15 +31,24 @@ contract VestingController is Ownable {
 
     uint256 _timestampCreated;
 
+    /**
+     * @notice Constuctor save time create and owner this contract
+     */
     constructor() {
         _timestampCreated = block.timestamp;
         transferOwnership(msg.sender);
     }
 
+    /**
+     * @notice Set token for vesting
+     */
     function addBLID(address token) external vestTime onlyOwner {
         blid = IERC20(token);
     }
 
+    /**
+     * @notice Deploy TokenVesting with this parameters, and transfer amount blid to TokenVesting
+     */
     function vest(
         address account,
         uint256 amount,
@@ -48,7 +57,13 @@ contract VestingController is Ownable {
         uint256 durationCount
     ) external vestTime onlyOwner {
         require(blid.balanceOf(address(this)) > amount, "VestingController: vest amount exceeds balance");
-        TokenVesting vesting = new TokenVesting(address(blid), account, startTimestamp, duration, durationCount);
+        TokenVesting vesting = new TokenVesting(
+            address(blid),
+            account,
+            startTimestamp,
+            duration,
+            durationCount
+        );
         blid.safeTransfer(address(vesting), amount);
         emit Vesting(address(vesting), account);
     }

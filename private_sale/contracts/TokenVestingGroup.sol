@@ -41,6 +41,9 @@ contract TokenVestingGroup is Ownable {
         _tokens = tokensValue;
     }
 
+    /**
+     * @notice Set amount of token for user deposited token
+     */
     function deposit(
         address user,
         address token,
@@ -50,6 +53,9 @@ contract TokenVestingGroup is Ownable {
         _sumUser[user] = amount;
     }
 
+    /**
+     * @notice Transfers vested tokens to beneficiary.
+     */
     function finishRound(uint256 startTimestampValue, uint256[] memory tokenRate) external onlyOwner {
         require(_startTimestamp == 0, "Vesting has been started");
         _startTimestamp = startTimestampValue;
@@ -73,6 +79,9 @@ contract TokenVestingGroup is Ownable {
         emit TokensReleased(address(_token), unreleased);
     }
 
+    /**
+     * @notice Set 0 for user deposited token
+     */
     function returnDeposit(address user) external onlyOwner {
         require(_startTimestamp == 0, "Vesting has been started");
         _userToken[user] = address(0);
@@ -121,6 +130,9 @@ contract TokenVestingGroup is Ownable {
         return _vestedAmount(msg.sender) - (_released[msg.sender]);
     }
 
+    /**
+     * @dev Calculates the user dollar deposited.
+     */
     function getUserShare(address account) public view returns (uint256) {
         return (_sumUser[account] * _rateToken[_userToken[account]]) / (1 ether);
     }

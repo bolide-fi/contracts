@@ -5,6 +5,14 @@ This contract was forked from [`that contract`](https://github.com/pancakeswap/p
 ---
 ## [👷‍♂️ Tech Requirements](../README.md#👷‍♂️-tech-requirements)
 
+## Interactions
+**MasterBlid** is cointain business logic. This contrat is owned and managed with Timelock contract.
+
+**Timelock** is need to do time delayed interactions with MasterBlid. There are few method to interact with the MasterBlid contact:
+- queueTransaction
+- cancelTransaction
+- executeTransaction
+
 ---
 ## How to run tests:
 - Run the `npm i`
