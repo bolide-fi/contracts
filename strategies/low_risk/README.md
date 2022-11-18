@@ -8,8 +8,8 @@
 ---
 ## How to run tests:
 - Run the `npm i`
-- Run the `truffle compile` command to compile the smart contracts
-- Run the `truffle test test`
+- Run the `npx hardhat compile` command to compile the smart contracts
+- Run the `npx hardhat test`
 ---
 ## 📄 Description:
 
@@ -26,6 +26,11 @@ Provides manage depositors tokens ability to admin (oracle) strategy
 - E5 - vToken is not used
 - E6 - blid is already set
 - E7 - storage is already set
+- E11 - BLID deposit amount should be less
+- E12 - withdraw BLID amount less than balance
+- E13 - BlidPerBlock should be less
+- E14 - Sender is not AccumulatedDepositor
+- E15 - LeaveTokenLimit should be increased all the time
 
 ### __Storage.sol__
 
@@ -34,11 +39,34 @@ This contract is upgradable. Interacts with users, distributes earned BLID, and 
 #### Error codes:
 - E1 - token is not used
 - E2 - is not logicContract
-- E3 - need more amount need than zero
-- E4 - withdraw amount exceeds balance
-- E5 - contracrt hasn't enough for interest fee, please contact the administrator
+- E3 - Need more amount need than zero
+- E4 - Withdraw amount exceeds balance
+- E5 - Contracrt hasn't enough for interest fee, please contact the administrator
 - E6 - token is already added
 - E7 - You can call updateAccumulatedRewardsPerShare one time for token
+
+### __/crosschain/CrosschainDepositor.sol__
+This contract is UUPS upgradeable, provides cross-chain token deposit.
+
+#### Error codes:
+- CD1 - Token should be added via addStargateToken()
+- CD2 - Token address should not be address(0)
+- CD3 - Token as been added already
+- CD4 - AccumulateDepositor should be added
+- CD5 - Some eth is required
+- CD6 - Deposit amout should be > 0
+- CD7 - Transaction gas fee is too small
+- CD8 - AccumulateDepositor has been added already
+
+### __/crosschain/AccumulatedDepositor.sol__
+This contract is UUPS upgradeable, provides cross-chain token accept and associates with Storage contract.
+
+#### Error codes:
+- AD1 - Storage contract has been added already
+- AD2 - Token should be added via addStargateToken()
+- AD3 - Token address should not be address(0)
+- AD4 - Token as been added already
+- AD5 - Only StargateRouter can call sgReceive() method
 
 ---
 ## Contracts Interaction architecture
