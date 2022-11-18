@@ -8,8 +8,8 @@
 ---
 ## How to run tests:
 - Run the `npm i`
-- Run the `truffle compile` command to compile the smart contracts
-- Run the `truffle test test`
+- Run the `npx hardhat compile` command to compile the smart contracts
+- Run the `npx hardhat test`
 ---
 ## 📄 Description:
 
