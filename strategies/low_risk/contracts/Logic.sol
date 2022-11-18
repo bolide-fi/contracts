@@ -1,19 +1,13 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity "0.8.13";
+pragma solidity 0.8.13;
 pragma abicoder v2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-
-interface IStorage {
-    function takeToken(uint256 amount, address token) external;
-
-    function returnToken(uint256 amount, address token) external;
-
-    function addEarn(uint256 amount) external;
-}
+import "@openzeppelin/contracts/utils/Multicall.sol";
+import "./Interfaces/IStorage.sol";
 
 interface IDistribution {
     function enterMarkets(address[] calldata vTokens) external returns (uint256[] memory);
@@ -217,7 +211,7 @@ interface IPancakeRouter01 {
     ) external payable returns (uint256[] memory amounts);
 }
 
-contract Logic is Ownable {
+contract Logic is Ownable, Multicall {
     using SafeERC20 for IERC20;
 
     struct ReserveLiquidity {
@@ -238,8 +232,10 @@ contract Logic is Ownable {
     address private venusController;
     address private pancake;
     address private apeswap;
+    address private biswap;
     address private pancakeMaster;
     address private apeswapMaster;
+    address private biswapMaster;
     address private expenseAddress;
     address private vBNB;
     mapping(address => bool) private usedVTokens;
@@ -254,18 +250,22 @@ contract Logic is Ownable {
     constructor(
         address _expenseAddress,
         address _venusController,
-        address pancakeRouter,
-        address apeswapRouter,
-        address pancakeMaster_,
-        address apeswapMaster_
+        address _pancakeRouter,
+        address _apeswapRouter,
+        address _biswapRouter,
+        address _pancakeMaster,
+        address _apeswapMaster,
+        address _biswapMaster
     ) {
         expenseAddress = _expenseAddress;
         venusController = _venusController;
 
-        apeswap = apeswapRouter;
-        pancake = pancakeRouter;
-        pancakeMaster = pancakeMaster_;
-        apeswapMaster = apeswapMaster_;
+        apeswap = _apeswapRouter;
+        pancake = _pancakeRouter;
+        biswap = _biswapRouter;
+        pancakeMaster = _pancakeMaster;
+        apeswapMaster = _apeswapMaster;
+        biswapMaster = _biswapMaster;
     }
 
     fallback() external payable {}
@@ -288,12 +288,12 @@ contract Logic is Ownable {
     }
 
     modifier isUsedSwap(address swap) {
-        require(swap == apeswap || swap == pancake, "E3");
+        require(swap == apeswap || swap == pancake || swap == biswap, "E3");
         _;
     }
 
     modifier isUsedMaster(address swap) {
-        require(swap == pancakeMaster || apeswapMaster == swap, "E4");
+        require(swap == pancakeMaster || apeswapMaster == swap || biswapMaster == swap, "E4");
         _;
     }
 
@@ -311,9 +311,11 @@ contract Logic is Ownable {
             IERC20(token).approve(vToken, type(uint256).max);
             IERC20(token).approve(apeswap, type(uint256).max);
             IERC20(token).approve(pancake, type(uint256).max);
+            IERC20(token).approve(biswap, type(uint256).max);
             IERC20(token).approve(_storage, type(uint256).max);
             IERC20(token).approve(pancakeMaster, type(uint256).max);
             IERC20(token).approve(apeswapMaster, type(uint256).max);
+            IERC20(token).approve(biswapMaster, type(uint256).max);
             VTokens[token] = vToken;
         } else {
             vBNB = vToken;
@@ -332,8 +334,10 @@ contract Logic is Ownable {
         blid = blid_;
         IERC20(blid).safeApprove(apeswap, type(uint256).max);
         IERC20(blid).safeApprove(pancake, type(uint256).max);
+        IERC20(blid).safeApprove(biswap, type(uint256).max);
         IERC20(blid).safeApprove(pancakeMaster, type(uint256).max);
         IERC20(blid).safeApprove(apeswapMaster, type(uint256).max);
+        IERC20(blid).safeApprove(biswapMaster, type(uint256).max);
         IERC20(blid).safeApprove(_storage, type(uint256).max);
         emit SetBLID(blid_);
     }
@@ -356,8 +360,10 @@ contract Logic is Ownable {
     function approveTokenForSwap(address token) external onlyOwner {
         (IERC20(token).approve(apeswap, type(uint256).max));
         (IERC20(token).approve(pancake, type(uint256).max));
+        (IERC20(token).approve(biswap, type(uint256).max));
         (IERC20(token).approve(pancakeMaster, type(uint256).max));
         (IERC20(token).approve(apeswapMaster, type(uint256).max));
+        (IERC20(token).approve(biswapMaster, type(uint256).max));
     }
 
     /**

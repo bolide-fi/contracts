@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity "0.8.13";
+pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -9,7 +9,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeab
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-interface LogicContract {
+interface ILogicContract {
     function returnToken(uint256 amount, address token) external;
 }
 
@@ -19,7 +19,7 @@ interface AggregatorV3Interface {
     function latestAnswer() external view returns (int256 answer);
 }
 
-contract StorageV2 is Initializable, OwnableUpgradeable, PausableUpgradeable {
+contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
     //struct
@@ -39,6 +39,12 @@ contract StorageV2 is Initializable, OwnableUpgradeable, PausableUpgradeable {
         mapping(address => uint256) rates;
     }
 
+    struct BoostInfo {
+        uint256 blidDeposit;
+        uint256 rewardDebt;
+        uint256 blidOverDeposit;
+    }
+
     /*** events ***/
 
     event Deposit(address depositor, address token, uint256 amount);
@@ -52,6 +58,14 @@ contract StorageV2 is Initializable, OwnableUpgradeable, PausableUpgradeable {
     event SetBLID(address blid);
     event AddToken(address token, address oracle);
     event SetLogic(address logic);
+    event SetBoostInfo(uint256 maxBlidPerUSD, uint256 blidPerBlock, uint256 maxBlid);
+    event DepositBLID(address depositor, uint256 amount);
+    event WithdrawBLID(address depositor, uint256 amount);
+    event ClaimBoostBLID(address depositor, uint256 amount);
+    event SetBoostingAddress(address boostingAddress);
+    event SetAdmin(address admin);
+    event UpgradeVersion(string version, string purpose);
+    event SetAccumulatedDepositor(address accumulatedDepositor);
 
     function initialize(address _logicContract) external initializer {
         OwnableUpgradeable.__Ownable_init();
@@ -74,6 +88,20 @@ contract StorageV2 is Initializable, OwnableUpgradeable, PausableUpgradeable {
     address private BLID;
     mapping(address => mapping(uint256 => uint256)) public accumulatedRewardsPerShare;
 
+    // Boost2.0
+    mapping(address => BoostInfo) private userBoosts;
+    uint256 public maxBlidPerUSD;
+    uint256 public blidPerBlock;
+    uint256 public initBlidPerBlock;
+    uint256 public maxBlidPerBlock;
+    uint256 public accBlidPerShare;
+    uint256 public lastRewardBlock;
+    uint256 public totalSupplyBLID;
+    address public expenseAddress;
+    // CrossChain
+    address private accumulatedDepositor;
+    address public boostingAddress;
+
     /*** modifiers ***/
 
     modifier isUsedToken(address _token) {
@@ -89,44 +117,60 @@ contract StorageV2 is Initializable, OwnableUpgradeable, PausableUpgradeable {
     /*** User function ***/
 
     /**
-     * @notice Deposit amount of token  to Strategy  and receiving earned tokens.
+     * @notice Deposit amount of token for msg.sender
      * @param amount amount of token
      * @param token address of token
      */
-    function deposit(uint256 amount, address token) external isUsedToken(token) whenNotPaused {
+    function deposit(uint256 amount, address token) external payable isUsedToken(token) whenNotPaused {
+        depositInternal(amount, token, msg.sender);
+    }
+
+    /**
+     * @notice Deposit amount of token on behalf of depositor wallet
+     * @param amount amount of token
+     * @param token address of token
+     * @param accountAddress Address of depositor
+     */
+    function depositOnBehalf(
+        uint256 amount,
+        address token,
+        address accountAddress
+    ) external payable isUsedToken(token) whenNotPaused {
+        require(msg.sender == accumulatedDepositor, "E14");
+
+        depositInternal(amount, token, accountAddress);
+    }
+
+    /**
+     * @notice Deposit BLID token for boosting.
+     * @param amount amount of token
+     */
+    function depositBLID(uint256 amount) external whenNotPaused {
         require(amount > 0, "E3");
-        uint8 decimals = AggregatorV3Interface(token).decimals();
-        DepositStruct storage depositor = deposits[msg.sender];
-        IERC20Upgradeable(token).safeTransferFrom(msg.sender, address(this), amount);
-        uint256 amountExp18 = amount * 10**(18 - decimals);
-        if (depositor.tokenTime[address(0)] == 0) {
-            depositor.iterate = countEarns;
-            depositor.depositIterate[token] = countEarns;
-            depositor.tokenTime[address(0)] = 1;
-            depositor.tokenTime[token] += int256(block.timestamp * (amountExp18));
-        } else {
-            interestFee();
-            if (depositor.depositIterate[token] == countEarns) {
-                depositor.tokenTime[token] += int256(block.timestamp * (amountExp18));
-            } else {
-                depositor.tokenTime[token] = int256(
-                    depositor.amount[token] *
-                        earnBLID[countEarns - 1].timestamp +
-                        block.timestamp *
-                        (amountExp18)
-                );
+        uint256 usdDepositAmount = balanceOf(msg.sender);
+        require(usdDepositAmount > 0, "E11");
 
-                depositor.depositIterate[token] = countEarns;
-            }
+        BoostInfo storage userBoost = userBoosts[msg.sender];
+
+        claimBoostRewardBLID();
+        IERC20Upgradeable(BLID).safeTransferFrom(msg.sender, address(this), amount);
+        uint256 totalAmount = userBoost.blidDeposit + amount;
+        uint256 depositAmount = amount;
+        if (totalAmount > (usdDepositAmount * maxBlidPerUSD)) {
+            uint256 overAmount = totalAmount - (usdDepositAmount * maxBlidPerUSD);
+            userBoost.blidOverDeposit += overAmount;
+            depositAmount = amount - overAmount;
         }
-        depositor.amount[token] += amountExp18;
 
-        tokenTime[token] += int256(block.timestamp * (amountExp18));
-        tokenBalance[token] += amountExp18;
-        tokenDeposited[token] += amountExp18;
+        userBoost.blidDeposit += depositAmount;
+        totalSupplyBLID += depositAmount;
+        userBoost.rewardDebt = (userBoost.blidDeposit * accBlidPerShare) / 1e18;
 
-        emit UpdateTokenBalance(tokenBalance[token], token);
-        emit Deposit(msg.sender, token, amountExp18);
+        if (maxBlidPerBlock < (totalSupplyBLID * blidPerBlock) / 1e18) {
+            blidPerBlock = ((maxBlidPerBlock * 1e18) / totalSupplyBLID);
+        }
+
+        emit DepositBLID(msg.sender, amount);
     }
 
     /**
@@ -141,7 +185,7 @@ contract StorageV2 is Initializable, OwnableUpgradeable, PausableUpgradeable {
         DepositStruct storage depositor = deposits[msg.sender];
         require(depositor.amount[token] >= amountExp18 && amount > 0, "E4");
         if (amountExp18 > tokenBalance[token]) {
-            LogicContract(logicContract).returnToken(amount, token);
+            ILogicContract(logicContract).returnToken(amount, token);
             interestFee();
             IERC20Upgradeable(token).safeTransferFrom(logicContract, msg.sender, amount);
             tokenDeposited[token] -= amountExp18;
@@ -169,6 +213,39 @@ contract StorageV2 is Initializable, OwnableUpgradeable, PausableUpgradeable {
     }
 
     /**
+     * @notice WithDraw BLID token for boosting.
+     * @param amount amount of token
+     */
+    function withdrawBLID(uint256 amount) external whenNotPaused {
+        require(amount > 0, "E3");
+        BoostInfo storage userBoost = userBoosts[msg.sender];
+        require(amount <= userBoost.blidDeposit + userBoost.blidOverDeposit, "E12");
+
+        claimBoostRewardBLID();
+        IERC20Upgradeable(BLID).safeTransfer(msg.sender, amount);
+        uint256 withdrawAmount = amount;
+        if (userBoost.blidOverDeposit > 0) {
+            if (userBoost.blidOverDeposit >= amount) {
+                userBoost.blidOverDeposit -= amount;
+                withdrawAmount = 0;
+            } else {
+                withdrawAmount = amount - userBoost.blidOverDeposit;
+                userBoost.blidOverDeposit = 0;
+            }
+        }
+
+        userBoost.blidDeposit -= withdrawAmount;
+        totalSupplyBLID -= withdrawAmount;
+        userBoost.rewardDebt = (userBoost.blidDeposit * accBlidPerShare) / 1e18;
+
+        if (maxBlidPerBlock > (totalSupplyBLID * initBlidPerBlock) / 1e18) {
+            blidPerBlock = initBlidPerBlock;
+        }
+
+        emit WithdrawBLID(msg.sender, amount);
+    }
+
+    /**
      * @notice Claim BLID to msg.sender
      */
     function interestFee() public {
@@ -188,6 +265,34 @@ contract StorageV2 is Initializable, OwnableUpgradeable, PausableUpgradeable {
         emit InterestFee(msg.sender, balanceUser);
     }
 
+    /**
+     * @notice Claim Boosting Reward BLID to msg.sender
+     */
+    function claimBoostRewardBLID() public {
+        updateAccBlidPerShare();
+        BoostInfo storage userBoost = userBoosts[msg.sender];
+        uint256 claimAmount;
+        if (userBoost.blidDeposit > 0) {
+            claimAmount = ((userBoost.blidDeposit * accBlidPerShare) / 1e18) - userBoost.rewardDebt;
+            if (claimAmount > 0) {
+                safeBlidTransfer(msg.sender, claimAmount);
+                userBoost.rewardDebt += claimAmount;
+            }
+        }
+
+        emit ClaimBoostBLID(msg.sender, claimAmount);
+    }
+
+    /**
+     * @notice get deposited Boosting BLID amount of user
+     * @param _user address of user
+     */
+    function getBoostingBLIDAmount(address _user) public view returns (uint256) {
+        BoostInfo storage userBoost = userBoosts[_user];
+        uint256 amount = userBoost.blidDeposit + userBoost.blidOverDeposit;
+        return amount;
+    }
+
     /*** Owner functions ***/
 
     /**
@@ -198,6 +303,50 @@ contract StorageV2 is Initializable, OwnableUpgradeable, PausableUpgradeable {
         BLID = _blid;
 
         emit SetBLID(_blid);
+    }
+
+    /**
+     * @notice Set blid in contract
+     * @param _boostingAddress address of expense
+     */
+    function setBoostingAddress(address _boostingAddress) external onlyOwner {
+        boostingAddress = _boostingAddress;
+
+        emit SetBoostingAddress(boostingAddress);
+    }
+
+    /**
+     * @notice Set boosting parameters
+     * @param _maxBlidperUSD max value of BLID per USD
+     * @param _blidperBlock blid per Block
+     * @param _maxBlidperBlock max blid per Block
+     */
+    function setBoostingInfo(
+        uint256 _maxBlidperUSD,
+        uint256 _blidperBlock,
+        uint256 _maxBlidperBlock
+    ) external onlyOwner {
+        if (totalSupplyBLID != 0) {
+            require((_blidperBlock * totalSupplyBLID) / 1e18 < _maxBlidperBlock, "E13");
+            updateAccBlidPerShare();
+        }
+
+        maxBlidPerUSD = _maxBlidperUSD;
+        blidPerBlock = _blidperBlock;
+        initBlidPerBlock = _blidperBlock;
+        maxBlidPerBlock = _maxBlidperBlock;
+
+        emit SetBoostInfo(_maxBlidperUSD, _blidperBlock, _maxBlidperBlock);
+    }
+
+    /**
+     * @notice Set AccumulatedDepositor address on destination chain
+     * @param _accumulatedDepositor Address AccumulatedDepositor on destination chain
+     */
+    function setAccumulatedDepositor(address _accumulatedDepositor) external onlyOwner {
+        accumulatedDepositor = _accumulatedDepositor;
+
+        emit SetAccumulatedDepositor(_accumulatedDepositor);
     }
 
     /**
@@ -237,6 +386,7 @@ contract StorageV2 is Initializable, OwnableUpgradeable, PausableUpgradeable {
         oracles[_token] = _oracles;
         tokens[countTokens++] = _token;
         tokensAdd[_token] = true;
+
         emit AddToken(_token, _oracles);
     }
 
@@ -246,6 +396,7 @@ contract StorageV2 is Initializable, OwnableUpgradeable, PausableUpgradeable {
      */
     function setLogic(address _logic) external onlyOwner {
         logicContract = _logic;
+
         emit SetLogic(_logic);
     }
 
@@ -287,6 +438,14 @@ contract StorageV2 is Initializable, OwnableUpgradeable, PausableUpgradeable {
 
         emit UpdateTokenBalance(tokenBalance[token], token);
         emit ReturnToken(token, amountExp18);
+    }
+
+    /**
+     * @notice Claim all BLID(from strategy and boost) for user
+     */
+    function claimAllRewardBLID() external {
+        interestFee();
+        claimBoostRewardBLID();
     }
 
     /**
@@ -377,7 +536,7 @@ contract StorageV2 is Initializable, OwnableUpgradeable, PausableUpgradeable {
      * @notice Return usd balance of account
      * @param account Address of Depositor
      */
-    function balanceOf(address account) external view returns (uint256) {
+    function balanceOf(address account) public view returns (uint256) {
         uint256 countTokens_ = countTokens;
         uint256 sum = 0;
         for (uint256 j = 0; j < countTokens_; j++) {
@@ -390,6 +549,8 @@ contract StorageV2 is Initializable, OwnableUpgradeable, PausableUpgradeable {
         }
         return sum;
     }
+
+    /*** External View function ***/
 
     /**
      * @notice Return sums of all distribution BLID.
@@ -467,6 +628,93 @@ contract StorageV2 is Initializable, OwnableUpgradeable, PausableUpgradeable {
      */
     function getTokenDeposited(address token) external view returns (uint256) {
         return tokenDeposited[token];
+    }
+
+    /**
+     * @notice Return pending BLID amount for boost to see on frontend
+     * @param _user address of user
+     */
+
+    function getBoostingClaimableBLID(address _user) external view returns (uint256) {
+        BoostInfo storage userBoost = userBoosts[_user];
+        uint256 blidSupply = totalSupplyBLID;
+        uint256 _accBLIDpershare = accBlidPerShare;
+        if (block.number > lastRewardBlock && blidSupply != 0) {
+            uint256 passedblockcount = block.number - lastRewardBlock;
+            _accBLIDpershare = accBlidPerShare + (passedblockcount * blidPerBlock);
+        }
+        return ((userBoost.blidDeposit * _accBLIDpershare) / 1e18) - userBoost.rewardDebt;
+    }
+
+    /*** Prvate Function ***/
+
+    /**
+     * @notice deposit token
+     * @param amount Amount of deposit token
+     * @param token Address of token
+     * @param accountAddress Address of depositor
+     */
+    function depositInternal(
+        uint256 amount,
+        address token,
+        address accountAddress
+    ) internal {
+        require(amount > 0, "E3");
+        uint8 decimals = AggregatorV3Interface(token).decimals();
+        DepositStruct storage depositor = deposits[accountAddress];
+        IERC20Upgradeable(token).safeTransferFrom(msg.sender, address(this), amount);
+        uint256 amountExp18 = amount * 10**(18 - decimals);
+        if (depositor.tokenTime[address(0)] == 0) {
+            depositor.iterate = countEarns;
+            depositor.depositIterate[token] = countEarns;
+            depositor.tokenTime[address(0)] = 1;
+            depositor.tokenTime[token] += int256(block.timestamp * (amountExp18));
+        } else {
+            interestFee();
+            if (depositor.depositIterate[token] == countEarns) {
+                depositor.tokenTime[token] += int256(block.timestamp * (amountExp18));
+            } else {
+                depositor.tokenTime[token] = int256(
+                    depositor.amount[token] *
+                        earnBLID[countEarns - 1].timestamp +
+                        block.timestamp *
+                        (amountExp18)
+                );
+
+                depositor.depositIterate[token] = countEarns;
+            }
+        }
+        depositor.amount[token] += amountExp18;
+
+        tokenTime[token] += int256(block.timestamp * (amountExp18));
+        tokenBalance[token] += amountExp18;
+        tokenDeposited[token] += amountExp18;
+
+        emit UpdateTokenBalance(tokenBalance[token], token);
+        emit Deposit(accountAddress, token, amountExp18);
+    }
+
+    // Safe blid transfer function, just in case if rounding error causes pool to not have enough BLIDs.
+    function safeBlidTransfer(address _to, uint256 _amount) internal {
+        IERC20Upgradeable(BLID).safeTransferFrom(boostingAddress, _to, _amount);
+    }
+
+    /**
+     * @notice update Accumulated BLID per share
+     */
+    function updateAccBlidPerShare() internal {
+        if (block.number <= lastRewardBlock) {
+            return;
+        }
+
+        if (totalSupplyBLID == 0) {
+            lastRewardBlock = block.number;
+            return;
+        }
+
+        uint256 passedblockcount = block.number - lastRewardBlock;
+        accBlidPerShare = accBlidPerShare + (passedblockcount * blidPerBlock);
+        lastRewardBlock = block.number;
     }
 
     /*** Prvate Function ***/
