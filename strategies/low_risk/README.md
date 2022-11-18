@@ -39,9 +39,9 @@ This contract is upgradable. Interacts with users, distributes earned BLID, and 
 #### Error codes:
 - E1 - token is not used
 - E2 - is not logicContract
-- E3 - need more amount need than zero
-- E4 - withdraw amount exceeds balance
-- E5 - contracrt hasn't enough for interest fee, please contact the administrator
+- E3 - Need more amount need than zero
+- E4 - Withdraw amount exceeds balance
+- E5 - Contracrt hasn't enough for interest fee, please contact the administrator
 - E6 - token is already added
 - E7 - You can call updateAccumulatedRewardsPerShare one time for token
 
