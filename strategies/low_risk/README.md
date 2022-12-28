@@ -1,24 +1,31 @@
 # Low risk strategy contracts
 
-## [`How strategy does work`](https://docs.bolide.fi/protocol/strategies/low-risk-strategy "Description")
+## [`How strategy does work`](https://docs.bolide.fi/protocol/strategies/low-risk-strategy 'Description')
 
 ---
+
 ## [👷‍♂️ Tech Requirements](../../README.md#👷‍♂️-tech-requirements)
 
 ---
+
 ## How to run tests:
+
 - Run the `npm i`
 - Run the `npx hardhat compile` command to compile the smart contracts
 - Run the `npx hardhat test`
+
 ---
+
 ## 📄 Description:
 
-One strategy includes two contracts: __Logic__ and __Storage__.
+One strategy includes two contracts: **Logic** and **Storage**.
 
-### __Logic.sol__
+### **Logic.sol**
+
 Provides manage depositors tokens ability to admin (oracle) strategy
 
 #### Error codes:
+
 - E1 - Cannot accept
 - E2 - vTokens is not used
 - E3 - swap is not used
@@ -32,11 +39,12 @@ Provides manage depositors tokens ability to admin (oracle) strategy
 - E14 - Sender is not AccumulatedDepositor
 - E15 - LeaveTokenLimit should be increased all the time
 
-### __Storage.sol__
+### **Storage.sol**
 
 This contract is upgradable. Interacts with users, distributes earned BLID, and associates with Logic contract.
 
 #### Error codes:
+
 - E1 - token is not used
 - E2 - is not logicContract
 - E3 - Need more amount need than zero
@@ -45,10 +53,12 @@ This contract is upgradable. Interacts with users, distributes earned BLID, and 
 - E6 - token is already added
 - E7 - You can call updateAccumulatedRewardsPerShare one time for token
 
-### __/crosschain/CrosschainDepositor.sol__
+### **/crosschain/CrosschainDepositor.sol**
+
 This contract is UUPS upgradeable, provides cross-chain token deposit.
 
 #### Error codes:
+
 - CD1 - Token should be added via addStargateToken()
 - CD2 - Token address should not be address(0)
 - CD3 - Token as been added already
@@ -58,10 +68,12 @@ This contract is UUPS upgradeable, provides cross-chain token deposit.
 - CD7 - Transaction gas fee is too small
 - CD8 - AccumulateDepositor has been added already
 
-### __/crosschain/AccumulatedDepositor.sol__
+### **/crosschain/AccumulatedDepositor.sol**
+
 This contract is UUPS upgradeable, provides cross-chain token accept and associates with Storage contract.
 
 #### Error codes:
+
 - AD1 - Storage contract has been added already
 - AD2 - Token should be added via addStargateToken()
 - AD3 - Token address should not be address(0)
@@ -69,17 +81,19 @@ This contract is UUPS upgradeable, provides cross-chain token accept and associa
 - AD5 - Only StargateRouter can call sgReceive() method
 
 ---
+
 ## Contracts Interaction architecture
 
-![image info](./diagram.jpg "Interactions")
----
+## ![image info](./diagram.jpg 'Interactions')
+
 ## BLID distribution model
+
 Bolide Low risk Strategy distribute all earned income once X hours (often it is about 6 times a day). Users can deposit their assets and withdraw at any moment regardless of distribution schedule. To support it Bolide’s strategies use following algorithm
 
 Let’s say we have:
 
 - User 1 (U1) at time moment 1 (T1) deposited 2 USD (A1)
-- User 2 (U2) at moment  2 (T2) deposited 2 USD (A2)
+- User 2 (U2) at moment 2 (T2) deposited 2 USD (A2)
 - The strategy made rewards distribution at moment 3 (t3) with 1 BLID distribution (B1)
 
 The goal is to make an honest distribution 1 BLID between 2 users, the amounts of rewards should depend on the time before distribution and amount of users deposit.
@@ -105,7 +119,7 @@ For our example
 
 $$\small DollarTimeDistribution(T_3) = \frac{1}{(2+4)} = \frac{1}{6}$$
 
-Or we can calculate DollarTimeDistribution as follows 
+Or we can calculate DollarTimeDistribution as follows
 
 $$\small DollarTimeDistribution(T) = \frac{B}{\sum_iAi*T-\sum_iAi*Ti}$$
 
@@ -117,7 +131,7 @@ After that, we can calculate user’s rewards as follows
 
 $$\small Rewards(U_i) = DollarTimeDistribution(T) * DollarTime(U_i) = DollarTimeDistribution(T) * (A_i * T_d - A_i * T_i)$$
 
-So we have 
+So we have
 
 $$\small Rewards(U_1) = \frac{1}{6} * (2 * 3 - 2 * 1) = \frac{2}{3}$$
 
@@ -125,6 +139,6 @@ $$\small Rewards(U_2) = \frac{1}{6} * (2 * 3 - 2 * 2) = \frac{1}{3}$$
 
 It's obvious that if user withdraw some amount of deposit than we should use Ai with “-” sign in all calculations.
 
-So the final formula is 
+So the final formula is
 
 $$\small Rewards(U) = DollarTimeDistribution(T) * (A_i * T_d - A_i * T_i)$$
