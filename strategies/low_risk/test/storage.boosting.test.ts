@@ -1062,5 +1062,164 @@ describe('Boosting2.0', async () => {
         startBlockUser2 = await ethers.provider.getBlockNumber();
       });
     });
+
+    describe("Total BLID supply", async () => {
+      before(async () => {
+        await time.advanceBlock();
+      });
+
+      it("after first BLID deposit for boosting", async () => {
+        const beforeTotalBlidSupply = await storageV21.totalSupplyBLID();
+
+        expect(beforeTotalBlidSupply).to.be.equal(
+          0,
+          "Total BLID supply should be 0"
+        );
+
+        await storageV21
+          .connect(other1)
+          .deposit(amountUSDTDeposit, usdt.address);
+
+        const depositAmount = amountUSDTDeposit
+          .mul(MaxBlidPerUSD.add(OverDepositPerUSD))
+          .div(ethers.utils.parseEther("1"));
+
+        await storageV21.connect(other1).depositBLID(depositAmount);
+
+        const afterTotalBlidSupply = await storageV21.totalSupplyBLID();
+        expect(afterTotalBlidSupply).to.be.equal(
+          beforeTotalBlidSupply.add(depositAmount),
+          "Total BLID supply should be updated after BLID deposit"
+        );
+      });
+
+      it("after second BLID deposit for boosting", async () => {
+        const beforeTotalBlidSupply = await storageV21.totalSupplyBLID();
+
+        await storageV21
+          .connect(other2)
+          .deposit(amountUSDTDeposit, usdt.address);
+
+        const depositAmount = amountUSDTDeposit
+          .mul(MaxBlidPerUSD.add(OverDepositPerUSD))
+          .div(ethers.utils.parseEther("1"));
+
+        await storageV21.connect(other2).depositBLID(depositAmount);
+
+        const afterTotalBlidSupply = await storageV21.totalSupplyBLID();
+        expect(afterTotalBlidSupply).to.be.equal(
+          beforeTotalBlidSupply.add(depositAmount),
+          "Total BLID supply should be updated after BLID deposit"
+        );
+      });
+
+      it("after claim BLID for user1", async () => {
+        const beforeTotalBlidSupply = await storageV21.totalSupplyBLID();
+
+        await storageV21.connect(other1).claimBoostingRewardBLID();
+
+        const afterTotalBlidSupply = await storageV21.totalSupplyBLID();
+        expect(afterTotalBlidSupply).to.be.equal(
+          beforeTotalBlidSupply,
+          "Total BLID supply should not be changed"
+        );
+      });
+
+      it("after claim BLID for user2", async () => {
+        const beforeTotalBlidSupply = await storageV21.totalSupplyBLID();
+
+        await storageV21.connect(other2).claimBoostingRewardBLID();
+
+        const afterTotalBlidSupply = await storageV21.totalSupplyBLID();
+        expect(afterTotalBlidSupply).to.be.equal(
+          beforeTotalBlidSupply,
+          "Total BLID supply should not be changed"
+        );
+      });
+
+      it("after withdraw BLID for user1 for OverDepositPerUSD", async () => {
+        const beforeTotalBlidSupply = await storageV21.totalSupplyBLID();
+
+        const withdrawAmount = user1DepositAmount
+          .mul(OverDepositPerUSD)
+          .div(MaxBlidPerUSD.add(OverDepositPerUSD));
+
+        await storageV21.connect(other1).withdrawBLID(withdrawAmount);
+
+        const afterTotalBlidSupply = await storageV21.totalSupplyBLID();
+        expect(afterTotalBlidSupply).to.be.equal(
+          beforeTotalBlidSupply.sub(withdrawAmount),
+          "Total BLID supply should be updated after BLID withdraw"
+        );
+      });
+
+      it("after withdraw BLID for user2 for 10%", async () => {
+        const beforeTotalBlidSupply = await storageV21.totalSupplyBLID();
+
+        const withdrawAmount = (await storageV21.balanceOf(other2.address))
+          .mul(MaxBlidPerUSD)
+          .div(10)
+          .div(ethers.utils.parseEther("1"));
+
+        await storageV21.connect(other2).withdrawBLID(withdrawAmount);
+
+        const afterTotalBlidSupply = await storageV21.totalSupplyBLID();
+        expect(afterTotalBlidSupply).to.be.equal(
+          beforeTotalBlidSupply.sub(withdrawAmount),
+          "Total BLID supply should be updated after BLID withdraw"
+        );
+      });
+
+      it("after withdraw BLID for user 1, claimReward will be using secondMaxBlidPerUSD", async () => {
+        const beforeTotalBlidSupply = await storageV21.totalSupplyBLID();
+
+        const withdrawAmount = (
+          await calcDepositBLIDAmount(other1.address, secondMaxBlidPerUSD)
+        )
+          .mul(amountUSDTDeposit)
+          .div(10)
+          .div(ethers.utils.parseEther("1"));
+
+        await storageV21.connect(other1).withdrawBLID(withdrawAmount);
+
+        const afterTotalBlidSupply = await storageV21.totalSupplyBLID();
+        expect(afterTotalBlidSupply).to.be.equal(
+          beforeTotalBlidSupply.sub(withdrawAmount),
+          "Total BLID supply should be updated after BLID withdraw"
+        );
+      });
+
+      it("after total withdraw for user 1", async () => {
+        const beforeTotalBlidSupply = await storageV21.totalSupplyBLID();
+
+        const withdrawAmount = await storageV21.getBoostingBLIDAmount(
+          other1.address
+        );
+
+        await storageV21.connect(other1).withdrawBLID(withdrawAmount);
+
+        const afterTotalBlidSupply = await storageV21.totalSupplyBLID();
+        expect(afterTotalBlidSupply).to.be.equal(
+          beforeTotalBlidSupply.sub(withdrawAmount),
+          "Total BLID supply should be updated after BLID withdraw"
+        );
+      });
+
+      it("after total withdraw for user 2", async () => {
+        const beforeTotalBlidSupply = await storageV21.totalSupplyBLID();
+
+        const withdrawAmount = await storageV21.getBoostingBLIDAmount(
+          other2.address
+        );
+
+        await storageV21.connect(other2).withdrawBLID(withdrawAmount);
+
+        const afterTotalBlidSupply = await storageV21.totalSupplyBLID();
+        expect(afterTotalBlidSupply).to.be.equal(
+          beforeTotalBlidSupply.sub(withdrawAmount),
+          "Total BLID supply should be updated after BLID withdraw"
+        );
+      });
+    });
   });
 });
