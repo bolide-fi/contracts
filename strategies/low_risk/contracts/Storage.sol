@@ -97,6 +97,7 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
     uint256 public accBlidPerShare;
     uint256 public lastRewardBlock;
     address public boostingAddress;
+    uint256 public totalSupplyBLID;
 
     /*** modifiers ***/
 
@@ -313,6 +314,7 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
         }
 
         userBoost.blidDeposit += depositAmount;
+        totalSupplyBLID += amount;
 
         // Save rewardDebt
         userBoost.rewardDebt = (userBoost.blidDeposit * accBlidPerShare) / 1e18;
@@ -344,6 +346,8 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
             userBoost.blidDeposit = totalAmount;
             userBoost.blidOverDeposit = 0;
         }
+
+        totalSupplyBLID -= amount;
 
         // Save rewardDebt
         userBoost.rewardDebt = (userBoost.blidDeposit * accBlidPerShare) / 1e18;
