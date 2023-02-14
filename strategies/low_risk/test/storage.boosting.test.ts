@@ -1708,7 +1708,7 @@ describe("Boosting2.0", async () => {
         ).to.be.equal("0", "User 2 balance should be 0");
       });
 
-      it("Start new epic", async () => {
+      it("Start new epoch", async () => {
         await storageV21.connect(logicContract).addEarn(_addEarnAmount);
       });
 
