@@ -1668,6 +1668,17 @@ describe("Boosting2.0", async () => {
 
         startBlockUser2 = await ethers.provider.getBlockNumber();
       });
+    });
+
+    describe("Time Subtraction Check", async () => {
+      const _maxBlidPerUSD = ethers.utils.parseEther("1");
+      const _blidPerBlock = ethers.utils.parseEther("0.000000028538812785");
+      const _maxActiveBLID = ethers.utils.parseEther("1000");
+      const _depositAmount = ethers.utils.parseEther("5");
+      const _smallAmount = ethers.utils.parseEther("4.9999999");
+      const _addEarnAmount = ethers.utils.parseEther("50");
+
+      let tokenTimeUser1: BigNumber, tokenTimeUser2: BigNumber;
 
       it("Withdraw total USDT", async () => {
         await storageV21
@@ -1696,72 +1707,9 @@ describe("Boosting2.0", async () => {
           (await storageV21.balanceOf(other2.address)).toString()
         ).to.be.equal("0", "User 2 balance should be 0");
       });
-    });
 
-    describe("Time Subtraction Check", async () => {
-      const _maxBlidPerUSD = ethers.utils.parseEther("1");
-      const _blidPerBlock = ethers.utils.parseEther("0.000000028538812785");
-      const _maxActiveBLID = ethers.utils.parseEther("1000");
-      const _depositAmount = ethers.utils.parseEther("5");
-      const _smallAmount = ethers.utils.parseEther("4.9999999");
-      const _addEarnAmount = ethers.utils.parseEther("50");
-
-      let tokenTimeUser1: BigNumber, tokenTimeUser2: BigNumber;
-
-      before(async () => {
-        const StorageV21 = await ethers.getContractFactory("StorageV21", owner);
-
-        storageV21 = (await upgrades.deployProxy(StorageV21, [], {
-          initializer: "initialize",
-          unsafeAllow: ["constructor"],
-        })) as StorageV21;
-        await storageV21.deployed();
-
-        await storageV21.connect(owner).setBLID(blid.address);
-
-        await storageV21
-          .connect(owner)
-          .addToken(usdt.address, aggregator3.address);
-
-        await storageV21
-          .connect(owner)
-          .addToken(usdc.address, aggregator3.address);
-
-        await storageV21.connect(owner).setLogic(logicContract.address);
-
-        await storageV21.connect(owner).setBoostingAddress(expenseer.address);
-
-        let tx = await usdt
-          .connect(other1)
-          .approve(storageV21.address, ethers.utils.parseEther("10000000000"));
-
-        tx = await usdt
-          .connect(other2)
-          .approve(storageV21.address, ethers.utils.parseEther("10000000000"));
-
-        tx = await usdc
-          .connect(other1)
-          .approve(storageV21.address, ethers.utils.parseEther("10000000000"));
-
-        tx = await usdc
-          .connect(other2)
-          .approve(storageV21.address, ethers.utils.parseEther("10000000000"));
-
-        tx = await blid
-          .connect(other1)
-          .approve(storageV21.address, ethers.utils.parseEther("10000000000"));
-
-        tx = await blid
-          .connect(other2)
-          .approve(storageV21.address, ethers.utils.parseEther("10000000000"));
-
-        tx = await blid
-          .connect(logicContract)
-          .approve(storageV21.address, ethers.utils.parseEther("10000000000"));
-
-        tx = await blid
-          .connect(expenseer)
-          .approve(storageV21.address, ethers.utils.parseEther("10000000000"));
+      it("Start new epic", async () => {
+        await storageV21.connect(logicContract).addEarn(_addEarnAmount);
       });
 
       it("Update Boosting Info", async () => {
@@ -1976,5 +1924,5 @@ describe("Boosting2.0", async () => {
         );
       });
     });
-  });  
+  });
 });
