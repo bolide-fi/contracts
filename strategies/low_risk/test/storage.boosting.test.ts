@@ -163,7 +163,7 @@ describe("Boosting2.0", async () => {
 
       await storageV21
         .connect(owner)
-        .addToken(usdc.address, aggregator3.address);
+        .addToken(usdc.address, aggregator.address);
 
       await storageV21.connect(owner).setLogic(logicContract.address);
 
@@ -650,9 +650,15 @@ describe("Boosting2.0", async () => {
           other2.address
         );
 
-        const tx = await aggregator3
+        let tx = await aggregator3
           .connect(owner)
           .updateRate("8", secondUSDRate.toString());
+        await tx.wait(1);
+
+        tx = await storageV21.setOracleLatestAnswer(
+          usdt.address,
+          secondUSDRate.toString()
+        );
         await tx.wait(1);
 
         let depositUser1New: BigNumber = await storageV21.balanceOf(
@@ -1708,7 +1714,7 @@ describe("Boosting2.0", async () => {
         ).to.be.equal("0", "User 2 balance should be 0");
       });
 
-      it("Start new epoch", async () => {
+      it("Start new epic", async () => {
         await storageV21.connect(logicContract).addEarn(_addEarnAmount);
       });
 
@@ -1922,6 +1928,46 @@ describe("Boosting2.0", async () => {
           true,
           "user2 earned is the same as expected"
         );
+      });
+    });
+
+    describe("Oracle KillSwitch", async () => {
+      it("deposit success", async () => {
+        await storageV21
+          .connect(other1)
+          .deposit(ethers.utils.parseEther("0.01"), usdt.address);
+        await storageV21
+          .connect(other1)
+          .deposit(ethers.utils.parseEther("0.01"), usdc.address);
+      });
+
+      it("Change USDT rate oracle to be 200%", async () => {
+        await aggregator3.connect(owner).updateRate(8, 200000000);
+      });
+
+      it("withdraw success", async () => {
+        await storageV21
+          .connect(other1)
+          .withdraw(ethers.utils.parseEther("0.001"), usdt.address);
+        await storageV21
+          .connect(other1)
+          .withdraw(ethers.utils.parseEther("0.001"), usdc.address);
+      });
+
+      it("Add earn should be failed", async () => {
+        await expect(
+          storageV21.connect(logicContract).addEarn("50")
+        ).to.be.revertedWith("E19");
+      });
+
+      it("Update latestAnswer for USDT", async () => {
+        await storageV21
+          .connect(owner)
+          .setOracleLatestAnswer(usdt.address, 200000000);
+      });
+
+      it("Add earn should be success", async () => {
+        await storageV21.connect(logicContract).addEarn("50");
       });
     });
   });
