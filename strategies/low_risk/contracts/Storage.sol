@@ -41,6 +41,11 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
         uint256 blidOverDeposit;
     }
 
+    struct OracleLatestAnswerInfo {
+        int256 latestAnswer;
+        uint256 timestamp;
+    }
+
     /*** events ***/
 
     event Deposit(address depositor, address token, uint256 amount);
@@ -63,6 +68,12 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
     event WithdrawBLID(address depositor, uint256 amount);
     event ClaimBoostBLID(address depositor, uint256 amount);
     event SetBoostingAddress(address boostingAddress);
+    event SetOracleDeviationLimit(uint256 setOracleDeviationLimit);
+    event SetOracleLatestAnswer(
+        address token,
+        int256 latestAnswer,
+        uint256 timestamp
+    );
     event SetAdmin(address admin);
     event UpgradeVersion(string version, string purpose);
 
@@ -71,6 +82,7 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
     function initialize() external initializer {
         OwnableUpgradeable.__Ownable_init();
         PausableUpgradeable.__Pausable_init();
+        oracleDeviationLimit = (1 ether) / uint256(86400); // limit is 1% within 1 day
     }
 
     mapping(uint256 => EarnBLID) private earnBLID;
@@ -103,6 +115,10 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
     uint256 public activeSupplyBLID;
 
     address private constant ZERO_ADDRESS = address(0);
+
+    // Oracle kill switch
+    uint256 public oracleDeviationLimit; // decimal = 18
+    mapping(address => OracleLatestAnswerInfo) private oracleLatestAnswerInfo;
 
     /*** modifiers ***/
 
@@ -193,6 +209,14 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
         tokens[countTokens++] = _token;
         tokensAdd[_token] = true;
 
+        (, int256 latestAnswer, , , ) = AggregatorV3Interface(_oracles)
+            .latestRoundData();
+        OracleLatestAnswerInfo
+            storage _oracleLatestAnswerInfo = oracleLatestAnswerInfo[_token];
+
+        _oracleLatestAnswerInfo.latestAnswer = latestAnswer;
+        _oracleLatestAnswerInfo.timestamp = block.timestamp;
+
         emit AddToken(_token, _oracles);
     }
 
@@ -208,6 +232,37 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
         emit SetLogic(_logic);
     }
 
+    /**
+     * @notice Set OracleDeviationLimit
+     * @param _oracleDeviationLimit Oracle Diviation per seccond limit
+     */
+    function setOracleDeviationLimit(uint256 _oracleDeviationLimit)
+        external
+        onlyOwner
+    {
+        oracleDeviationLimit = _oracleDeviationLimit;
+
+        emit SetOracleDeviationLimit(_oracleDeviationLimit);
+    }
+
+    /**
+     * @notice Force update token's recent latestAnswer
+     * @param token address of token
+     * @param latestAnswer new latestAnswer
+     */
+    function setOracleLatestAnswer(address token, int256 latestAnswer)
+        external
+        onlyOwner
+    {
+        OracleLatestAnswerInfo
+            storage _oracleLatestAnswerInfo = oracleLatestAnswerInfo[token];
+
+        _oracleLatestAnswerInfo.latestAnswer = latestAnswer;
+        _oracleLatestAnswerInfo.timestamp = block.timestamp;
+
+        emit SetOracleLatestAnswer(token, latestAnswer, block.timestamp);
+    }
+
     /*** User functions ***/
 
     /**
@@ -215,10 +270,11 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
      * @param amount amount of token
      * @param token address of token
      */
-    function deposit(
-        uint256 amount,
-        address token
-    ) external onlyUsedToken(token) whenNotPaused {
+    function deposit(uint256 amount, address token)
+        external
+        onlyUsedToken(token)
+        whenNotPaused
+    {
         _depositInternal(amount, token, msg.sender);
     }
 
@@ -242,13 +298,14 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
      * @param amount Amount of token
      * @param token Address of token
      */
-    function withdraw(
-        uint256 amount,
-        address token
-    ) external onlyUsedToken(token) whenNotPaused {
+    function withdraw(uint256 amount, address token)
+        external
+        onlyUsedToken(token)
+        whenNotPaused
+    {
         uint8 decimals = IERC20MetadataUpgradeable(token).decimals();
         uint256 countEarns_ = countEarns;
-        uint256 amountExp18 = amount * 10 ** (18 - decimals);
+        uint256 amountExp18 = amount * 10**(18 - decimals);
         bool isEnoughBalance = false;
         DepositStruct storage depositor = deposits[msg.sender];
 
@@ -260,7 +317,6 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
             tokenBalance[token] -= amountExp18;
         }
         tokenDeposited[token] -= amountExp18;
-        tokenTime[token] -= (block.timestamp * (amountExp18)).toInt256();
 
         if (depositor.depositIterate[token] == countEarns_) {
             depositor.tokenTime[token] -= (block.timestamp * (amountExp18))
@@ -273,6 +329,8 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
             depositor.depositIterate[token] = countEarns_;
         }
         depositor.amount[token] -= amountExp18;
+
+        tokenTime[token] -= (block.timestamp * (amountExp18)).toInt256();
 
         // Claim BoostingRewardBLID
         _claimBoostingRewardBLIDInternal(msg.sender, true);
@@ -303,15 +361,15 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
         uint256 balanceUser = balanceEarnBLID(accountAddress);
         require(reserveBLID >= balanceUser, "E5");
 
-        if (balanceUser > 0) {
-            DepositStruct storage depositor = deposits[accountAddress];
+        DepositStruct storage depositor = deposits[accountAddress];
+        depositor.iterate = countEarns;
 
+        if (balanceUser > 0) {
             //unchecked is used because a check was made in require
             unchecked {
                 reserveBLID -= balanceUser;
                 depositor.balanceBLID = 0;
             }
-            depositor.iterate = countEarns;
 
             // Interaction
             IERC20Upgradeable(BLID).safeTransfer(accountAddress, balanceUser);
@@ -385,9 +443,11 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
      * @notice get deposited Boosting BLID amount of user
      * @param _user address of user
      */
-    function getBoostingBLIDAmount(
-        address _user
-    ) public view returns (uint256) {
+    function getBoostingBLIDAmount(address _user)
+        public
+        view
+        returns (uint256)
+    {
         BoostInfo storage userBoost = userBoosts[_user];
         uint256 amount = userBoost.blidDeposit + userBoost.blidOverDeposit;
         return amount;
@@ -400,12 +460,13 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
      * @param amount Amount of token
      * @param token Address of token
      */
-    function takeToken(
-        uint256 amount,
-        address token
-    ) external isLogicContract(msg.sender) onlyUsedToken(token) {
+    function takeToken(uint256 amount, address token)
+        external
+        isLogicContract(msg.sender)
+        onlyUsedToken(token)
+    {
         uint8 decimals = IERC20MetadataUpgradeable(token).decimals();
-        uint256 amountExp18 = amount * 10 ** (18 - decimals);
+        uint256 amountExp18 = amount * 10**(18 - decimals);
 
         require(tokenBalance[token] >= amountExp18, "E18");
 
@@ -423,12 +484,13 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
      * @param amount Amount of token
      * @param token Address of token
      */
-    function returnToken(
-        uint256 amount,
-        address token
-    ) external isLogicContract(msg.sender) onlyUsedToken(token) {
+    function returnToken(uint256 amount, address token)
+        external
+        isLogicContract(msg.sender)
+        onlyUsedToken(token)
+    {
         uint8 decimals = IERC20MetadataUpgradeable(token).decimals();
-        uint256 amountExp18 = amount * 10 ** (18 - decimals);
+        uint256 amountExp18 = amount * 10**(18 - decimals);
 
         tokenBalance[token] = tokenBalance[token] + amountExp18;
 
@@ -467,8 +529,34 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
                 oracles[token]
             );
             (, int256 latestAnswer, , , ) = oracle.latestRoundData();
+
+            // Oracle Kill Switch
+            OracleLatestAnswerInfo
+                storage _oracleLatestAnswerInfo = oracleLatestAnswerInfo[token];
+
+            // Calculate deviation percentage per second
+            int256 delta = _oracleLatestAnswerInfo.latestAnswer - latestAnswer;
+            if (delta < 0) delta = 0 - delta;
+            if (
+                block.timestamp == _oracleLatestAnswerInfo.timestamp ||
+                _oracleLatestAnswerInfo.latestAnswer == 0
+            ) {
+                delta = 0;
+            } else {
+                delta =
+                    (delta * (1e18)) /
+                    (_oracleLatestAnswerInfo.latestAnswer *
+                        (block.timestamp - _oracleLatestAnswerInfo.timestamp)
+                            .toInt256());
+            }
+            require(uint256(delta) <= oracleDeviationLimit, "E19");
+
+            // Save latestAnswer
+            _oracleLatestAnswerInfo.latestAnswer = latestAnswer;
+            _oracleLatestAnswerInfo.timestamp = block.timestamp;
+
             thisEarnBLID.rates[token] = (uint256(latestAnswer) *
-                10 ** (18 - oracle.decimals()));
+                10**(18 - oracle.decimals()));
 
             // count all deposited token in usd
             thisEarnBLID.usd +=
@@ -592,12 +680,13 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
 
             sum += ((deposits[account].amount[token] *
                 uint256(latestAnswer) *
-                10 ** (18 - oracle.decimals())) / (1 ether));
+                10**(18 - oracle.decimals())) / (1 ether));
 
             unchecked {
                 ++j;
             }
         }
+
         return sum;
     }
 
@@ -616,14 +705,16 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
         uint256 sum = 0;
         for (uint256 j = 0; j < countTokens_; ) {
             address token = tokens[j];
+
             AggregatorV3Interface oracle = AggregatorV3Interface(
                 oracles[token]
             );
             (, int256 latestAnswer, , , ) = oracle.latestRoundData();
+
             sum +=
                 (tokenDeposited[token] *
                     uint256(latestAnswer) *
-                    10 ** (18 - oracle.decimals())) /
+                    10**(18 - oracle.decimals())) /
                 (1 ether);
 
             unchecked {
@@ -643,10 +734,11 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
     /**
      * @notice Return deposited token from account
      */
-    function getTokenDeposit(
-        address account,
-        address token
-    ) external view returns (uint256) {
+    function getTokenDeposit(address account, address token)
+        external
+        view
+        returns (uint256)
+    {
         return deposits[account].amount[token];
     }
 
@@ -671,9 +763,15 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
      * Second return value is a timestamp when  distribution BLID token completed.
      * Third return value is an amount of dollar depositedhen  distribution BLID token completed.
      */
-    function getEarnsByID(
-        uint256 id
-    ) external view returns (uint256, uint256, uint256) {
+    function getEarnsByID(uint256 id)
+        external
+        view
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
+    {
         return (earnBLID[id].allBLID, earnBLID[id].timestamp, earnBLID[id].usd);
     }
 
@@ -690,9 +788,11 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
      * @param _user address of user
      */
 
-    function getBoostingClaimableBLID(
-        address _user
-    ) external view returns (uint256) {
+    function getBoostingClaimableBLID(address _user)
+        external
+        view
+        returns (uint256)
+    {
         BoostInfo storage userBoost = userBoosts[_user];
         uint256 _accBLIDpershare = accBlidPerShare;
         if (block.number > lastRewardBlock) {
@@ -727,11 +827,13 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
         address accountAddress
     ) internal {
         require(amount > 0, "E3");
+
         uint256 countEarns_ = countEarns;
         uint8 decimals = IERC20MetadataUpgradeable(token).decimals();
         DepositStruct storage depositor = deposits[accountAddress];
 
-        uint256 amountExp18 = amount * 10 ** (18 - decimals);
+        uint256 amountExp18 = amount * 10**(18 - decimals);
+
         if (depositor.tokenTime[ZERO_ADDRESS] == 0) {
             depositor.iterate = countEarns_;
             depositor.depositIterate[token] = countEarns_;
@@ -782,10 +884,9 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
      * @param token Address of Token
      * @param id of accumulatedRewardsPerShare
      */
-    function _updateAccumulatedRewardsPerShareById(
-        address token,
-        uint256 id
-    ) private {
+    function _updateAccumulatedRewardsPerShareById(address token, uint256 id)
+        private
+    {
         EarnBLID storage thisEarnBLID = earnBLID[id];
 
         if (id == 0) {
