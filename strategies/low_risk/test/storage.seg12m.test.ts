@@ -307,11 +307,11 @@ describe("Storage", async () => {
     console.log('--User2 Actual Earn:', ethers.utils.formatEther(actualEarnedUser2));
 
 
-    // expect(actualEarnedUser1.add(actualEarnedUser2)).to.be.closeTo(addEarnAmount, ethers.utils.parseEther("0.000000000000000001"));
-    // expect(user1TDT.add(user2TDT)).to.be.equal(tokenTime);
-    // expect(actualEarnedUser1).to.be.equal(calculatedUser1EarnExpected);
-    // expect(actualEarnedUser2).to.be.equal(calculatedUser2EarnExpected);
-    // expect(user1TokenTime).to.be.equal(user1TokenTimeCalculated);
-    // expect(user2TokenTime).to.be.equal(user2TokenTimeCalculated);
+    expect(user1TDT.add(user2TDT)).to.be.equal(epochTDT);
+    expect(actualEarnedUser1).to.be.equal(calculatedUser1EarnExpected);
+    expect(actualEarnedUser2).to.be.equal(calculatedUser2EarnExpected);
+    expect(user1TokenTime).to.be.equal(user1TokenTimeCalculated);
+    expect(user2TokenTime).to.be.equal(user2TokenTimeCalculated);
+    expect(actualEarnedUser1.add(actualEarnedUser2)).to.be.closeTo(addEarnAmount, ethers.utils.parseEther("0.000000000000000001"));
   });
 });
