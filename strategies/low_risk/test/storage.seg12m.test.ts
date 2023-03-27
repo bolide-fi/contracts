@@ -269,9 +269,9 @@ describe("Storage", async () => {
     console.log('--Dollar Time:', dollarTime.toString());
     console.log('--Token Time:', tokenTime.toString());
 
-    const user1TDT = await storage.getUserTokenTime(addr1.address, usdt.address);
+    const user1TDT = await storage.getUserTDT(addr1.address, usdt.address);
     console.log('--User1 TDT:', user1TDT.toString());
-    const user2TDT = await storage.getUserTokenTime(addr2.address, usdt.address);
+    const user2TDT = await storage.getUserTDT(addr2.address, usdt.address);
     console.log('--User2 TDT:', user2TDT.toString());
     console.log('--Total User TDT', user1TDT.add(user2TDT).toString());
 
