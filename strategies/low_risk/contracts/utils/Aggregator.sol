@@ -30,7 +30,7 @@ contract AggregatorN3 {
     uint8 _decimals;
     int256 _latestAnswer;
 
-    constructor() public {
+    constructor() {
         _decimals = 8;
         _latestAnswer = 100000000;
     }

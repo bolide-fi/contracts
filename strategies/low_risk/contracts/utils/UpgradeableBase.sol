@@ -7,14 +7,14 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./OwnableUpgradeableVersionable.sol";
 import "./OwnableUpgradeableAdminable.sol";
 
-abstract contract LogicUpgradeable is
+abstract contract UpgradeableBase is
     Initializable,
     OwnableUpgradeableVersionable,
     OwnableUpgradeableAdminable,
     UUPSUpgradeable
 {
     /// @custom:oz-upgrades-unsafe-allow constructor
-    function initialize() public initializer {
+    function initialize() public onlyInitializing {
         __Ownable_init();
         __UUPSUpgradeable_init();
     }

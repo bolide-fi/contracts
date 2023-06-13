@@ -9,9 +9,24 @@ interface IStorage {
 
     function addEarn(uint256 amount) external;
 
+    function _isUsedToken(address _token) external returns (bool);
+
+    function getTokenDeposit(address account, address token)
+        external
+        view
+        returns (uint256);
+
+    function getTotalDeposit() external view returns (uint256);
+
+    function getTokenBalance(address token) external view returns (uint256);
+
+    function getTokenDeposited(address token) external view returns (uint256);
+
     function depositOnBehalf(
         uint256 amount,
         address token,
         address accountAddress
     ) external;
+
+    function getUsedTokens() external view returns (address[] memory);
 }

@@ -4,18 +4,20 @@ pragma solidity 0.8.13;
 pragma abicoder v2;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-import "../libs/LogicUpgradeable.sol";
-import "../Interfaces/IStargateRouter.sol";
+import "../utils/UpgradeableBase.sol";
+import "../interfaces/IStargateRouter.sol";
 
-contract CrossChainDepositor is LogicUpgradeable {
+contract CrossChainDepositor is UpgradeableBase {
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
     address private accumulatedDepositor;
     address private stargateRouter;
     mapping(address => uint8) private stargateTokenPoolId;
+    uint256 stargateDstGasForCall;
 
     event SetAccumulatedDepositor(address accumulatedDepositor);
     event SetStargateTokenPoolId(address token, uint8 poolId);
+    event SetStargateDstGasForCall(uint256 stargateDstGasForCall);
     event DepositStargate(
         uint16 chainId,
         uint8 srcPoolId,
@@ -24,12 +26,12 @@ contract CrossChainDepositor is LogicUpgradeable {
         uint256 dstGasForCall,
         uint256 gasFee,
         address depositor,
-        address receiver
+        address accumulatedDepositor,
+        address stargateRouter
     );
 
-    function __CrossChainDepositor_init(address _stargateRouter) public initializer {
-        LogicUpgradeable.initialize();
-        stargateRouter = _stargateRouter;
+    function __CrossChainDepositor_init() public initializer {
+        UpgradeableBase.initialize();
     }
 
     receive() external payable {}
@@ -44,14 +46,44 @@ contract CrossChainDepositor is LogicUpgradeable {
     /*** User function ***/
 
     /**
+     * @notice get stargateDstGasForCall value
+     */
+    function getStargateDstGasForCall() external view returns (uint256) {
+        return stargateDstGasForCall;
+    }
+
+    /**
      * @notice Set AccumulatedDepositor address on destination chain
      * @param _accumulatedDepositor Address AccumulatedDepositor on destination chain
      */
-    function setAccumulatedDepositor(address _accumulatedDepositor) external onlyOwner {
-        require(accumulatedDepositor == address(0), "CD8");
+    function setAccumulatedDepositor(address _accumulatedDepositor)
+        external
+        onlyOwner
+    {
         accumulatedDepositor = _accumulatedDepositor;
 
         emit SetAccumulatedDepositor(_accumulatedDepositor);
+    }
+
+    /**
+     * @notice set stargateRouter
+     * @param _stargateRouter StargateRouter address
+     */
+    function setStargateRouter(address _stargateRouter) external onlyOwner {
+        stargateRouter = _stargateRouter;
+    }
+
+    /**
+     * @notice Set stargateDstGasForCall value that gas amount for destination chain
+     * @param _stargateDstGasForCall Amount of DstGasForCall
+     */
+    function setStargateDstGasForCall(uint256 _stargateDstGasForCall)
+        external
+        onlyOwner
+    {
+        stargateDstGasForCall = _stargateDstGasForCall;
+
+        emit SetStargateDstGasForCall(_stargateDstGasForCall);
     }
 
     /**
@@ -87,7 +119,11 @@ contract CrossChainDepositor is LogicUpgradeable {
             1, // swap remote
             abi.encodePacked(accumulatedDepositor),
             data,
-            IStargateRouter.lzTxObj(dstGasForCall, 0, "0x")
+            IStargateRouter.lzTxObj(
+                dstGasForCall,
+                0,
+                abi.encodePacked(accumulatedDepositor)
+            )
         );
     }
 
@@ -107,33 +143,41 @@ contract CrossChainDepositor is LogicUpgradeable {
         uint256 amountIn,
         uint256 amountOutMin,
         uint256 dstGasForCall
-    ) external payable isUsedStargateToken(srcToken) isUsedStargateToken(dstToken) {
-        require(msg.value > 0, "CD5");
-        require(accumulatedDepositor != address(0), "CD4");
-        require(amountIn > 0, "CD6");
+    )
+        external
+        payable
+        isUsedStargateToken(srcToken)
+        isUsedStargateToken(dstToken)
+    {
+        address _accumulatedDepositor = accumulatedDepositor;
 
-        // Payload via anyCall
-        bytes memory data = abi.encode(msg.sender);
+        require(msg.value > 0, "CD5");
+        require(_accumulatedDepositor != address(0), "CD4");
+        require(amountIn > 0, "CD6");
+        require(
+            stargateDstGasForCall > 0 && stargateDstGasForCall <= dstGasForCall,
+            "CD8"
+        );
 
         // Estimate gas fee
-        uint256 feeWei;
-        (feeWei, ) = IStargateRouter(stargateRouter).quoteLayerZeroFee(
-            chainId,
-            1, // swap remote
-            abi.encodePacked(accumulatedDepositor),
-            data,
-            IStargateRouter.lzTxObj(dstGasForCall, 0, "0x")
-        );
+        uint256 feeWei = getDepositFeeStargate(chainId, dstGasForCall);
         require(msg.value >= feeWei, "CD7");
 
         // Take token from user wallet
-        IERC20Upgradeable(srcToken).safeTransferFrom(msg.sender, address(this), amountIn);
+        IERC20Upgradeable(srcToken).safeTransferFrom(
+            msg.sender,
+            address(this),
+            amountIn
+        );
 
         // Approve token for swap
-        IERC20Upgradeable(srcToken).safeApprove(address(stargateRouter), amountIn);
+        IERC20Upgradeable(srcToken).safeApprove(
+            address(stargateRouter),
+            amountIn
+        );
 
         // Swap via Stargate
-        IStargateRouter(stargateRouter).swap{ value: msg.value }(
+        IStargateRouter(stargateRouter).swap{value: msg.value}(
             chainId,
             stargateTokenPoolId[srcToken],
             stargateTokenPoolId[dstToken],
@@ -141,8 +185,8 @@ contract CrossChainDepositor is LogicUpgradeable {
             amountIn,
             amountOutMin,
             IStargateRouter.lzTxObj(dstGasForCall, 0, "0x"),
-            abi.encodePacked(accumulatedDepositor),
-            data
+            abi.encodePacked(_accumulatedDepositor),
+            abi.encode(msg.sender)
         );
 
         emit DepositStargate(
@@ -153,6 +197,7 @@ contract CrossChainDepositor is LogicUpgradeable {
             dstGasForCall,
             msg.value,
             msg.sender,
+            _accumulatedDepositor,
             stargateRouter
         );
     }

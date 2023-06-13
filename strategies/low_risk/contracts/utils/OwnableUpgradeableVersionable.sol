@@ -19,10 +19,10 @@ abstract contract OwnableUpgradeableVersionable is OwnableUpgradeable {
     }
 
     /**
-    * @notice Set version and purpose
-    * @param version Version string, ex : 1.2.0
-    * @param purpose Purpose string
-    */
+     * @notice Set version and purpose
+     * @param version Version string, ex : 1.2.0
+     * @param purpose Purpose string
+     */
     function upgradeVersion(string memory version, string memory purpose)
         external
         onlyOwner
