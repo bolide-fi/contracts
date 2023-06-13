@@ -105,6 +105,7 @@ describe("Storage", async () => {
   async function forwardTo(amount: number = 1) {
     console.log('------------------------');
     console.log(`Move forward ${amount} blocks..`);
+    await time.increase(31536000);
     await mine(amount);
     console.log('------------------------');
   }
@@ -176,7 +177,7 @@ describe("Storage", async () => {
     let user1TokenTimeCalculated: BigNumber;
     let user2TokenTimeCalculated: BigNumber;
     const amount = "10";
-    const lessAmount = "9.9999";
+    const lessAmount = "10";
     const depositAmount = ethers.utils.parseEther(amount);
     const withdrawAmount = ethers.utils.parseEther(lessAmount);
     const { storage, usdt, addr1, addr2, logic } = await loadFixture(deployFixture);
@@ -313,5 +314,90 @@ describe("Storage", async () => {
     expect(user1TokenTime).to.be.equal(user1TokenTimeCalculated);
     expect(user2TokenTime).to.be.equal(user2TokenTimeCalculated);
     expect(actualEarnedUser1.add(actualEarnedUser2)).to.be.closeTo(addEarnAmount, ethers.utils.parseEther("0.000000000000000001"));
+  });
+
+  it("should be allow user to deposit and in the next epoch withdraw in one year", async () => {
+    let tx;
+    let user1TokenTimeCalculated: BigNumber;
+    const amount = "10";
+    const depositAmount = ethers.utils.parseEther(amount);
+    const { storage, usdt, addr1, addr2, logic, blid } = await loadFixture(deployFixture);
+
+    console.log(`User 1 Deposit ${amount} USDT...`);
+    tx = await storage.connect(addr1).deposit(depositAmount, usdt.address);
+    await tx.wait();
+    user1TokenTimeCalculated = depositAmount.mul(await time.latest());
+    console.log('--User Token Time calculated:', user1TokenTimeCalculated.toString());
+    console.log('--User Token Time from the contract:', (await storage.getUserTokenTime(addr1.address, usdt.address)).toString());
+
+    await forwardTo(300);
+
+    console.log('NEW EPOCH - Add Earn');
+    const addEarnAmount = ethers.utils.parseEther("50");
+    await storage.connect(logic).addEarn(addEarnAmount);
+    console.log('------------------------');
+
+    // Forward to one year
+    await time.increase(31536000);
+    await forwardTo(10000000);
+
+    const actualEarned = await storage.balanceEarnBLID(addr1.address);
+    console.log('--Actual Earn:', ethers.utils.formatEther(actualEarned));
+
+
+    const userBlidBalance = await blid.balanceOf(addr1.address);
+    console.log(`User 1 Withdraw ${amount} USDT...`);
+    await expect(storage.connect(addr1).withdraw(depositAmount.add(BigNumber.from(1)), usdt.address)).to.be.reverted;
+    tx = await storage.connect(addr1).withdraw(depositAmount, usdt.address);
+    await tx.wait();
+
+    const updatedUserBlidBalance = await blid.balanceOf(addr1.address);
+
+    expect(actualEarned).to.be.equal(addEarnAmount);
+    expect(userBlidBalance.add(actualEarned)).to.be.equal(updatedUserBlidBalance);
+
+  });
+
+  it("should be allow user to deposit and in one year withdraw in the same epoch", async () => {
+    let tx;
+    let user1TokenTimeCalculated: BigNumber;
+    const amount = "10";
+    const depositAmount = ethers.utils.parseEther(amount);
+    const { storage, usdt, addr1, addr2, logic, blid } = await loadFixture(deployFixture);
+
+    console.log(`User 1 Deposit ${amount} USDT...`);
+    tx = await storage.connect(addr1).deposit(depositAmount, usdt.address);
+    await tx.wait();
+    user1TokenTimeCalculated = depositAmount.mul(await time.latest());
+    console.log('--User Token Time calculated:', user1TokenTimeCalculated.toString());
+    console.log('--User Token Time from the contract:', (await storage.getUserTokenTime(addr1.address, usdt.address)).toString());
+
+    await forwardTo(30000);
+
+    // Forward to one year
+    await time.increase(31536000);
+    await forwardTo(10000000);
+
+    const userBlidBalance = await blid.balanceOf(addr1.address);
+    console.log(`User 1 Withdraw ${amount} USDT...`);
+    await expect(storage.connect(addr1).withdraw(depositAmount.add(BigNumber.from(1)), usdt.address)).to.be.reverted;
+    tx = await storage.connect(addr1).withdraw(depositAmount, usdt.address);
+    await tx.wait();
+
+
+    console.log('NEW EPOCH - Add Earn');
+    const addEarnAmount = ethers.utils.parseEther("50");
+    await storage.connect(logic).addEarn(addEarnAmount);
+    console.log('------------------------');
+
+
+    const actualEarned = await storage.balanceEarnBLID(addr1.address);
+    console.log('--Actual Earn:', ethers.utils.formatEther(actualEarned));
+    await storage.connect(addr1).claimAllRewardBLID();
+
+    const updatedUserBlidBalance = await blid.balanceOf(addr1.address);
+
+    expect(actualEarned).to.be.equal(addEarnAmount);
+    expect(userBlidBalance.add(actualEarned)).to.be.equal(updatedUserBlidBalance);
   });
 });
