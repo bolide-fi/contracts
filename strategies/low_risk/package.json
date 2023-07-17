@@ -2,8 +2,8 @@
   "scripts": {
     "compile": "npx hardhat clean && npx hardhat compile",
     "clean": "npx hardhat clean",
-    "test:storage": "npx hardhat test --network hardhat test/storage.test.ts",
-    "test:boosting": "npx hardhat test --network hardhat test/storage.boosting.test.ts"
+    "test:hardhat": "npx hardhat --config hardhat.config.local.ts compile && npx hardhat --config hardhat.config.local.ts test --grep hardhat",
+    "test:forge": "forge test -vvv"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.7.0",
@@ -11,6 +11,7 @@
     "@openzeppelin/hardhat-upgrades": "^1.18.3",
     "@truffle/hdwallet-provider": "^1.7.0",
     "@types/node": "^18.7.18",
+    "@uniswap/v3-periphery": "^1.4.3",
     "ethers": "^5.7.1",
     "hardhat": "^2.10.0"
   },
@@ -34,6 +35,8 @@
     "@types/node": "^18.7.18",
     "chai": "^4.3.4",
     "chai-as-promised": "^7.1.1",
+    "dotenv": "^16.3.1",
+    "hardhat-contract-sizer": "^2.10.0",
     "mocha": "^10.0.0",
     "truffle-plugin-verify": "^0.5.25",
     "ts-node": "^10.9.1",

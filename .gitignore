@@ -6,3 +6,10 @@ build
 data.json
 artifacts
 cache
+typechain-types/
+
+.env*
+
+# Forge compiler files
+forge-cache/
+out/
