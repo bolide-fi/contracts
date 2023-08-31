@@ -19,10 +19,7 @@ contract DForceStatisticsPolygonTest is Test {
     uint256 private constant BLOCK_NUMBER2 = 43_402_723;
 
     function setUp() public {
-        mainnetFork = vm.createSelectFork(
-            "https://polygon-rpc.com",
-            BLOCK_NUMBER
-        );
+        mainnetFork = vm.createSelectFork(vm.rpcUrl("polygon"), BLOCK_NUMBER);
 
         // SwapGateway
         swapGateway = new SwapGateway();
@@ -76,9 +73,7 @@ contract DForceStatisticsPolygonTest is Test {
     }
 
     function testGetXTokensInfo() public {
-        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(
-            controller
-        );
+        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(controller);
 
         assertEq(xTokensInfo.length, 11);
     }
@@ -86,31 +81,25 @@ contract DForceStatisticsPolygonTest is Test {
     function testGetXTokenInfo() public {
         address iUSDT = 0xb3ab7148cCCAf66686AD6C1bE24D83e58E6a504e;
 
-        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(
-            iUSDT,
-            controller
-        );
+        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(iUSDT, controller);
 
         assertEq(block.number, BLOCK_NUMBER);
 
         assertEq(xTokenInfo.platformAddress, iUSDT);
         assertEq(xTokenInfo.symbol, "iUSDT");
-        assertEq(
-            xTokenInfo.underlyingAddress,
-            0xc2132D05D31c914a87C6611C10748AEb04B58e8F
-        );
+        assertEq(xTokenInfo.underlyingAddress, 0xc2132D05D31c914a87C6611C10748AEb04B58e8F);
         assertEq(xTokenInfo.underlyingSymbol, "USDT");
-        assertEq(xTokenInfo.totalSupply, 1341154015139);
+        assertEq(xTokenInfo.totalSupply, 1371476766384);
         assertEq(xTokenInfo.totalBorrows, 759582022670);
         assertEq(xTokenInfo.collateralFactor, 850000000000000000);
         assertEq(xTokenInfo.borrowApy, 31245945444911099);
         assertEq(xTokenInfo.supplyApy, 15454961035687756);
         assertEq(xTokenInfo.underlyingPrice, 1004023560000000000);
         assertEq(xTokenInfo.liquidity, 614834935823391683400000);
-        assertEq(xTokenInfo.totalSupplyUSD, 1346550228788152674840000);
+        assertEq(xTokenInfo.totalSupplyUSD, 1376994985442152007040000);
         assertEq(xTokenInfo.totalBorrowsUSD, 762638246513134105200000);
         assertEq(xTokenInfo.borrowRewardsApy, 24853867820763101);
-        assertEq(xTokenInfo.supplyRewardsApy, 32974951104536731);
+        assertEq(xTokenInfo.supplyRewardsApy, 32234296819399581);
     }
 
     function testGetStrategyAnalytics() public {

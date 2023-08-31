@@ -10,9 +10,12 @@
 
 ## How to run tests:
 
+### Hardhat tests
 - Run the `npm i`
-- Run the `npx hardhat compile` command to compile the smart contracts
-- Run the `npx hardhat test`
+- Run the `npm run test:hardhat`
+
+### Forge tests
+- Run the `npm run test:forge`
 
 ---
 

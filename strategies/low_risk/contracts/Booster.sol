@@ -46,10 +46,7 @@ contract Booster is UpgradeableBase {
      * @notice Set blid in contract
      * @param _boostingAddress address of expense
      */
-    function setBoostingAddress(address _boostingAddress)
-        external
-        onlyOwnerAndAdmin
-    {
+    function setBoostingAddress(address _boostingAddress) external onlyOwnerAndAdmin {
         require(_boostingAddress != ZERO_ADDRESS, "B0");
         boostingAddress = _boostingAddress;
 
@@ -61,10 +58,7 @@ contract Booster is UpgradeableBase {
      * @param _strategy Address of strategy
      * @param _blidPerDay Amount of blidPerDay (decimal = 18)
      */
-    function setBlidPerDay(address _strategy, uint256 _blidPerDay)
-        external
-        onlyOwnerAndAdmin
-    {
+    function setBlidPerDay(address _strategy, uint256 _blidPerDay) external onlyOwnerAndAdmin {
         blidPerDayPerStrategy[_strategy] = _blidPerDay;
 
         emit SetBlidPerDay(_strategy, _blidPerDay);
@@ -84,11 +78,7 @@ contract Booster is UpgradeableBase {
                 uint256(block.timestamp - lastBoostingTimestamp)) / 86400;
 
             // Interaction
-            IERC20Upgradeable(blid).safeTransferFrom(
-                boostingAddress,
-                logic,
-                boostingAmount
-            );
+            IERC20Upgradeable(blid).safeTransferFrom(boostingAddress, logic, boostingAmount);
         }
 
         // Save boosting block

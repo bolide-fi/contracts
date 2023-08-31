@@ -7,10 +7,19 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Multicall.sol";
-import "./Interfaces/IStorage.sol";
+
+interface IStorage {
+    function takeToken(uint256 amount, address token) external;
+
+    function returnToken(uint256 amount, address token) external;
+
+    function addEarn(uint256 amount) external;
+}
 
 interface IDistribution {
-    function enterMarkets(address[] calldata vTokens) external returns (uint256[] memory);
+    function enterMarkets(address[] calldata vTokens)
+        external
+        returns (uint256[] memory);
 
     function markets(address vTokenAddress)
         external
@@ -47,7 +56,10 @@ interface IMasterChef {
 
     function emergencyWithdraw(uint256 _pid) external;
 
-    function userInfo(uint256 _pid, address account) external view returns (uint256, uint256);
+    function userInfo(uint256 _pid, address account)
+        external
+        view
+        returns (uint256, uint256);
 }
 
 interface IVToken {
@@ -211,7 +223,7 @@ interface IPancakeRouter01 {
     ) external payable returns (uint256[] memory amounts);
 }
 
-contract Logic is Ownable, Multicall {
+contract LogicV1 is Ownable, Multicall {
     using SafeERC20 for IERC20;
 
     struct ReserveLiquidity {
@@ -293,7 +305,12 @@ contract Logic is Ownable, Multicall {
     }
 
     modifier isUsedMaster(address swap) {
-        require(swap == pancakeMaster || apeswapMaster == swap || biswapMaster == swap, "E4");
+        require(
+            swap == pancakeMaster ||
+                apeswapMaster == swap ||
+                biswapMaster == swap,
+            "E4"
+        );
         _;
     }
 
@@ -373,7 +390,11 @@ contract Logic is Ownable, Multicall {
      * @param amount Amount of token
      * @param token Address of token
      */
-    function returnToken(uint256 amount, address token) external payable onlyStorage {
+    function returnToken(uint256 amount, address token)
+        external
+        payable
+        onlyStorage
+    {
         uint256 takeFromVenus = 0;
         uint256 length = reserves.length;
         //check logic balance
@@ -393,7 +414,10 @@ contract Logic is Ownable, Multicall {
             ); //get amount of lp token that need for reedem liqudity
 
             //get how many deposited to farming
-            (uint256 depositedLp, ) = IMasterChef(reserve.swapMaster).userInfo(reserve.poolID, address(this));
+            (uint256 depositedLp, ) = IMasterChef(reserve.swapMaster).userInfo(
+                reserve.poolID,
+                address(this)
+            );
             if (depositedLp == 0) continue;
             // if deposited LP tokens don't enough  for repay borrow and for reedem token then only repay
             // borow and continue loop, else repay borow, reedem token and break loop
@@ -437,7 +461,10 @@ contract Logic is Ownable, Multicall {
      * @param amount Amount of token
      * @param token Address of token
      */
-    function takeTokenFromStorage(uint256 amount, address token) external onlyOwnerAndAdmin {
+    function takeTokenFromStorage(uint256 amount, address token)
+        external
+        onlyOwnerAndAdmin
+    {
         IStorage(_storage).takeToken(amount, token);
     }
 
@@ -446,7 +473,10 @@ contract Logic is Ownable, Multicall {
      * @param amount Amount of token
      * @param token Address of token
      */
-    function returnTokenToStorage(uint256 amount, address token) external onlyOwnerAndAdmin {
+    function returnTokenToStorage(uint256 amount, address token)
+        external
+        onlyOwnerAndAdmin
+    {
         IStorage(_storage).returnToken(amount, token);
     }
 
@@ -466,7 +496,11 @@ contract Logic is Ownable, Multicall {
      * @return For each market, returns an error code indicating whether or not it was entered.
      * Each is 0 on success, otherwise an Error code
      */
-    function enterMarkets(address[] calldata vTokens) external onlyOwnerAndAdmin returns (uint256[] memory) {
+    function enterMarkets(address[] calldata vTokens)
+        external
+        onlyOwnerAndAdmin
+        returns (uint256[] memory)
+    {
         return IDistribution(venusController).enterMarkets(vTokens);
     }
 
@@ -492,7 +526,7 @@ contract Logic is Ownable, Multicall {
         returns (uint256)
     {
         if (vToken == vBNB) {
-            IVToken(vToken).mint{ value: mintAmount }();
+            IVToken(vToken).mint{value: mintAmount}();
         }
         return IVToken(vToken).mint(mintAmount);
     }
@@ -530,7 +564,7 @@ contract Logic is Ownable, Multicall {
         returns (uint256)
     {
         if (vToken == vBNB) {
-            IVToken(vToken).repayBorrow{ value: repayAmount }();
+            IVToken(vToken).repayBorrow{value: repayAmount}();
             return 0;
         }
         return IVToken(vToken).repayBorrow(repayAmount);
@@ -586,16 +620,17 @@ contract Logic is Ownable, Multicall {
             uint256 liquidity
         )
     {
-        (amountADesired, amountBDesired, amountAMin) = IPancakeRouter01(swap).addLiquidity(
-            tokenA,
-            tokenB,
-            amountADesired,
-            amountBDesired,
-            amountAMin,
-            amountBMin,
-            address(this),
-            deadline
-        );
+        (amountADesired, amountBDesired, amountAMin) = IPancakeRouter01(swap)
+            .addLiquidity(
+                tokenA,
+                tokenB,
+                amountADesired,
+                amountBDesired,
+                amountAMin,
+                amountBMin,
+                address(this),
+                deadline
+            );
 
         return (amountADesired, amountBDesired, amountAMin);
     }
@@ -618,7 +653,12 @@ contract Logic is Ownable, Multicall {
         uint256 amountAMin,
         uint256 amountBMin,
         uint256 deadline
-    ) external onlyOwnerAndAdmin isUsedSwap(swap) returns (uint256 amountA, uint256 amountB) {
+    )
+        external
+        onlyOwnerAndAdmin
+        isUsedSwap(swap)
+        returns (uint256 amountA, uint256 amountB)
+    {
         (amountAMin, amountBMin) = IPancakeRouter01(swap).removeLiquidity(
             tokenA,
             tokenB,
@@ -647,7 +687,12 @@ contract Logic is Ownable, Multicall {
         uint256 amountOutMin,
         address[] calldata path,
         uint256 deadline
-    ) external isUsedSwap(swap) onlyOwnerAndAdmin returns (uint256[] memory amounts) {
+    )
+        external
+        isUsedSwap(swap)
+        onlyOwnerAndAdmin
+        returns (uint256[] memory amounts)
+    {
         return
             IPancakeRouter01(swap).swapExactTokensForTokens(
                 amountIn,
@@ -673,7 +718,12 @@ contract Logic is Ownable, Multicall {
         uint256 amountInMax,
         address[] calldata path,
         uint256 deadline
-    ) external onlyOwnerAndAdmin isUsedSwap(swap) returns (uint256[] memory amounts) {
+    )
+        external
+        onlyOwnerAndAdmin
+        isUsedSwap(swap)
+        returns (uint256[] memory amounts)
+    {
         return
             IPancakeRouter01(swap).swapTokensForExactTokens(
                 amountOut,
@@ -712,9 +762,16 @@ contract Logic is Ownable, Multicall {
             uint256 liquidity
         )
     {
-        (amountETHDesired, amountTokenMin, amountETHMin) = IPancakeRouter01(swap).addLiquidityETH{
-            value: amountETHDesired
-        }(token, amountTokenDesired, amountTokenMin, amountETHMin, address(this), deadline);
+        (amountETHDesired, amountTokenMin, amountETHMin) = IPancakeRouter01(
+            swap
+        ).addLiquidityETH{value: amountETHDesired}(
+            token,
+            amountTokenDesired,
+            amountTokenMin,
+            amountETHMin,
+            address(this),
+            deadline
+        );
 
         return (amountETHDesired, amountTokenMin, amountETHMin);
     }
@@ -735,7 +792,13 @@ contract Logic is Ownable, Multicall {
         uint256 amountTokenMin,
         uint256 amountETHMin,
         uint256 deadline
-    ) external payable isUsedSwap(swap) onlyOwnerAndAdmin returns (uint256 amountToken, uint256 amountETH) {
+    )
+        external
+        payable
+        isUsedSwap(swap)
+        onlyOwnerAndAdmin
+        returns (uint256 amountToken, uint256 amountETH)
+    {
         (deadline, amountETHMin) = IPancakeRouter01(swap).removeLiquidityETH(
             token,
             liquidity,
@@ -763,9 +826,14 @@ contract Logic is Ownable, Multicall {
         uint256 amountOutMin,
         address[] calldata path,
         uint256 deadline
-    ) external isUsedSwap(swap) onlyOwnerAndAdmin returns (uint256[] memory amounts) {
+    )
+        external
+        isUsedSwap(swap)
+        onlyOwnerAndAdmin
+        returns (uint256[] memory amounts)
+    {
         return
-            IPancakeRouter01(swap).swapExactETHForTokens{ value: amountETH }(
+            IPancakeRouter01(swap).swapExactETHForTokens{value: amountETH}(
                 amountOutMin,
                 path,
                 address(this),
@@ -788,7 +856,13 @@ contract Logic is Ownable, Multicall {
         uint256 amountInMax,
         address[] calldata path,
         uint256 deadline
-    ) external payable isUsedSwap(swap) onlyOwnerAndAdmin returns (uint256[] memory amounts) {
+    )
+        external
+        payable
+        isUsedSwap(swap)
+        onlyOwnerAndAdmin
+        returns (uint256[] memory amounts)
+    {
         return
             IPancakeRouter01(swap).swapTokensForExactETH(
                 amountOut,
@@ -814,7 +888,13 @@ contract Logic is Ownable, Multicall {
         uint256 amountOutMin,
         address[] calldata path,
         uint256 deadline
-    ) external payable isUsedSwap(swap) onlyOwnerAndAdmin returns (uint256[] memory amounts) {
+    )
+        external
+        payable
+        isUsedSwap(swap)
+        onlyOwnerAndAdmin
+        returns (uint256[] memory amounts)
+    {
         return
             IPancakeRouter01(swap).swapExactTokensForETH(
                 amountIn,
@@ -840,9 +920,14 @@ contract Logic is Ownable, Multicall {
         uint256 amountOut,
         address[] calldata path,
         uint256 deadline
-    ) external isUsedSwap(swap) onlyOwnerAndAdmin returns (uint256[] memory amounts) {
+    )
+        external
+        isUsedSwap(swap)
+        onlyOwnerAndAdmin
+        returns (uint256[] memory amounts)
+    {
         return
-            IPancakeRouter01(swap).swapETHForExactTokens{ value: amountETH }(
+            IPancakeRouter01(swap).swapETHForExactTokens{value: amountETH}(
                 amountOut,
                 path,
                 address(this),
@@ -908,7 +993,10 @@ contract Logic is Ownable, Multicall {
      * @notice Add reserve staked lp token to end list
      * @param reserveLiquidity Data is about staked lp in farm
      */
-    function addReserveLiquidity(ReserveLiquidity memory reserveLiquidity) external onlyOwnerAndAdmin {
+    function addReserveLiquidity(ReserveLiquidity memory reserveLiquidity)
+        external
+        onlyOwnerAndAdmin
+    {
         reserves.push(reserveLiquidity);
     }
 
@@ -929,7 +1017,11 @@ contract Logic is Ownable, Multicall {
     /**
      * @notice Return reserves staked lp tokens for return user their tokens. return ReserveLiquidity
      */
-    function getReserve(uint256 id) external view returns (ReserveLiquidity memory) {
+    function getReserve(uint256 id)
+        external
+        view
+        returns (ReserveLiquidity memory)
+    {
         return reserves[id];
     }
 
@@ -945,20 +1037,23 @@ contract Logic is Ownable, Multicall {
         address VTokenB,
         uint256 lpAmount
     ) private {
-        (uint256 amountToken, uint256 amountETH) = IPancakeRouter01(swap).removeLiquidityETH(
-            tokenB,
-            lpAmount,
-            0,
-            0,
-            address(this),
-            block.timestamp + 1 days
-        );
+        (uint256 amountToken, uint256 amountETH) = IPancakeRouter01(swap)
+            .removeLiquidityETH(
+                tokenB,
+                lpAmount,
+                0,
+                0,
+                address(this),
+                block.timestamp + 1 days
+            );
         {
-            uint256 totalBorrow = IVToken(VTokenA).borrowBalanceCurrent(address(this));
+            uint256 totalBorrow = IVToken(VTokenA).borrowBalanceCurrent(
+                address(this)
+            );
             if (totalBorrow >= amountETH) {
-                IVToken(VTokenA).repayBorrow{ value: amountETH }();
+                IVToken(VTokenA).repayBorrow{value: amountETH}();
             } else {
-                IVToken(VTokenA).repayBorrow{ value: totalBorrow }();
+                IVToken(VTokenA).repayBorrow{value: totalBorrow}();
             }
 
             totalBorrow = IVToken(VTokenB).borrowBalanceCurrent(address(this));
@@ -981,17 +1076,20 @@ contract Logic is Ownable, Multicall {
         address VTokenB,
         uint256 lpAmount
     ) private {
-        (uint256 amountA, uint256 amountB) = IPancakeRouter01(swap).removeLiquidity(
-            tokenA,
-            tokenB,
-            lpAmount,
-            0,
-            0,
-            address(this),
-            block.timestamp + 1 days
-        );
+        (uint256 amountA, uint256 amountB) = IPancakeRouter01(swap)
+            .removeLiquidity(
+                tokenA,
+                tokenB,
+                lpAmount,
+                0,
+                0,
+                address(this),
+                block.timestamp + 1 days
+            );
         {
-            uint256 totalBorrow = IVToken(VTokenA).borrowBalanceCurrent(address(this));
+            uint256 totalBorrow = IVToken(VTokenA).borrowBalanceCurrent(
+                address(this)
+            );
             if (totalBorrow >= amountA) {
                 IVToken(VTokenA).repayBorrow(amountA);
             } else {
@@ -1010,7 +1108,9 @@ contract Logic is Ownable, Multicall {
     /**
      * @notice Withdraw lp token from farms and repay borrow
      */
-    function withdrawAndRepay(ReserveLiquidity memory reserve, uint256 lpAmount) private {
+    function withdrawAndRepay(ReserveLiquidity memory reserve, uint256 lpAmount)
+        private
+    {
         IMasterChef(reserve.swapMaster).withdraw(reserve.poolID, lpAmount);
         if (reserve.tokenA == address(0) || reserve.tokenB == address(0)) {
             //if tokenA is BNB
@@ -1068,7 +1168,10 @@ contract Logic is Ownable, Multicall {
             return amountIn;
         }
 
-        uint256[] memory price = IPancakeRouter01(swap).getAmountsOut(amountIn, path);
+        uint256[] memory price = IPancakeRouter01(swap).getAmountsOut(
+            amountIn,
+            path
+        );
         return price[price.length - 1];
     }
 
@@ -1091,14 +1194,23 @@ contract Logic is Ownable, Multicall {
             return (value * (totalSupply)) / (totalTokenAmount) / 2;
         }
 
-        uint256[] memory price = IPancakeRouter01(swap).getAmountsOut((1 gwei), path);
-        return (value * (totalSupply)) / ((price[price.length - 1] * 2 * totalTokenAmount) / (1 gwei));
+        uint256[] memory price = IPancakeRouter01(swap).getAmountsOut(
+            (1 gwei),
+            path
+        );
+        return
+            (value * (totalSupply)) /
+            ((price[price.length - 1] * 2 * totalTokenAmount) / (1 gwei));
     }
 
     /**
      * @notice FindPath for swap router
      */
-    function findPath(uint256 id, address token) private view returns (address[] memory path) {
+    function findPath(uint256 id, address token)
+        private
+        view
+        returns (address[] memory path)
+    {
         ReserveLiquidity memory reserve = reserves[id];
         uint256 length = reserve.path.length;
 

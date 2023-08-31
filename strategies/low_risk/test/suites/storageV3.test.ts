@@ -3,14 +3,15 @@
  *******************************************/
 
 import {ethers, upgrades} from "hardhat";
-import {TokenDistributionModel} from "./utils/TokenDistributionModel";
+import {TokenDistributionModel} from "../../utils/TokenDistributionModel";
 import {time} from "@openzeppelin/test-helpers";
 import {
   ERC20,
-  StorageV21,
+  StorageV3,
   Aggregator,
   AggregatorN2,
-} from "../typechain-types";
+  MultiLogic,
+} from "../../typechain-types";
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {expect} from "chai";
 import {BigNumber} from "ethers";
@@ -23,25 +24,30 @@ async function getTimestampTransaction(transaction: ContractTransaction) {
 
 async function deployContracts(
   owner: SignerWithAddress,
-  logicContract: SignerWithAddress
+  multiLogicProxyContract: SignerWithAddress
 ) {
   let blid: ERC20,
     usdt: ERC20,
     usdtn2: ERC20,
     usdc: ERC20,
-    storage: StorageV21,
+    storage3: StorageV3,
     aggregator: Aggregator,
     aggregator2: AggregatorN2,
-    model: TokenDistributionModel;
+    model: TokenDistributionModel,
+    multiLogicProxy: MultiLogic;
 
   model = new TokenDistributionModel();
 
-  const Storage = await ethers.getContractFactory("StorageV21", owner);
+  const Storage = await ethers.getContractFactory("StorageV3", owner);
   const Aggregator = await ethers.getContractFactory("Aggregator", owner);
   const AggregatorN2 = await ethers.getContractFactory("AggregatorN2", owner);
+  const MultiLogicProxy = await ethers.getContractFactory("MultiLogic", owner);
   const USDT = await ethers.getContractFactory("ERC20", owner);
   const USDC = await ethers.getContractFactory("ERC20", owner);
-  const BLID = await ethers.getContractFactory("ERC20", logicContract);
+  const BLID = await ethers.getContractFactory(
+    "ERC20",
+    multiLogicProxyContract
+  );
   const USDTN2 = await ethers.getContractFactory("ERC20", owner);
 
   aggregator = (await Aggregator.deploy()) as Aggregator;
@@ -51,17 +57,53 @@ async function deployContracts(
   usdtn2 = (await USDTN2.deploy("some erc20", "SERC")) as ERC20;
   usdc = (await USDC.deploy("some erc20", "SERC")) as ERC20;
 
-  storage = (await upgrades.deployProxy(Storage, [], {
+  storage3 = (await upgrades.deployProxy(Storage, [], {
     initializer: "initialize",
     unsafeAllow: ["constructor"],
-  })) as StorageV21;
-  await storage.deployed();
+  })) as StorageV3;
+  await storage3.deployed();
+
+  multiLogicProxy = (await upgrades.deployProxy(MultiLogicProxy, [], {
+    kind: "uups",
+    initializer: "__MultiLogicProxy_init",
+  })) as MultiLogic;
+  await multiLogicProxy.deployed();
 
   let tx;
-  tx = await storage.connect(owner).setBLID(blid.address);
+  tx = await storage3.connect(owner).setBLID(blid.address);
   await tx.wait(1);
 
-  tx = await storage.connect(owner).setLogic(logicContract.address);
+  tx = await storage3
+    .connect(owner)
+    .setMultiLogicProxy(multiLogicProxy.address);
+  await tx.wait(1);
+
+  tx = await multiLogicProxy.connect(owner).setStorage(storage3.address);
+  await tx.wait(1);
+
+  tx = await multiLogicProxy.connect(owner).initStrategies(
+    ["LBF", "LBL"],
+    [
+      {
+        logicContract: blid.address,
+        strategyContract: usdt.address,
+      },
+      {
+        logicContract: usdtn2.address,
+        strategyContract: usdc.address,
+      },
+    ]
+  );
+  await tx.wait(1);
+
+  tx = await multiLogicProxy
+    .connect(owner)
+    .setPercentages(usdt.address, [7000, 3000]);
+  await tx.wait(1);
+
+  tx = await multiLogicProxy
+    .connect(owner)
+    .setPercentages(usdc.address, [7000, 3000]);
   await tx.wait(1);
 
   return {
@@ -69,24 +111,27 @@ async function deployContracts(
     usdt,
     usdtn2,
     usdc,
-    storage,
+    storage3,
+    multiLogicProxy,
     aggregator,
     aggregator2,
     model,
   };
 }
 
-describe("StorageV21", async () => {
+export const storageV3 = () => {
   let blid: ERC20, usdt: ERC20, usdtn2: ERC20, usdc: ERC20;
-  let storage: StorageV21,
+  let storage3: StorageV3,
     aggregator: Aggregator,
     aggregator2: AggregatorN2,
+    multiLogicProxy: MultiLogic,
     startTime: typeof time,
     model: TokenDistributionModel,
     transationTime: number,
     balance: BigNumber;
   let owner: SignerWithAddress,
     logicContract: SignerWithAddress,
+    multiLogicProxyContract: SignerWithAddress,
     Alexander: SignerWithAddress,
     Dmitry: SignerWithAddress,
     Victor: SignerWithAddress,
@@ -94,15 +139,24 @@ describe("StorageV21", async () => {
     other2: SignerWithAddress;
 
   before(async () => {
-    [owner, logicContract, Alexander, Dmitry, Victor, other1, other2] =
-      await ethers.getSigners();
-    const contracts = await deployContracts(owner, logicContract);
+    [
+      owner,
+      logicContract,
+      multiLogicProxyContract,
+      Alexander,
+      Dmitry,
+      Victor,
+      other1,
+      other2,
+    ] = await ethers.getSigners();
+    const contracts = await deployContracts(owner, multiLogicProxyContract);
 
     blid = contracts.blid;
     usdt = contracts.usdt;
     usdtn2 = contracts.usdtn2;
     usdc = contracts.usdc;
-    storage = contracts.storage;
+    storage3 = contracts.storage3;
+    multiLogicProxy = contracts.multiLogicProxy;
     aggregator = contracts.aggregator;
     aggregator2 = contracts.aggregator2;
     model = contracts.model;
@@ -128,8 +182,8 @@ describe("StorageV21", async () => {
       expect(address).to.be.not.eql(undefined);
     });
 
-    it("deploys storage successfully", async () => {
-      const address = await storage.address;
+    it("deploys storage3 successfully", async () => {
+      const address = await storage3.address;
       expect(address).to.be.not.eql(0x0);
       expect(address).to.be.not.eql("");
       expect(address).to.be.not.eql(null);
@@ -147,18 +201,18 @@ describe("StorageV21", async () => {
 
   describe("add tokens", async () => {
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
-      await storage.connect(owner).addToken(usdc.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdc.address, aggregator.address);
     });
 
     it("_isUsedToken", async () => {
-      let isUsedToken = await storage._isUsedToken(usdt.address);
+      let isUsedToken = await storage3._isUsedToken(usdt.address);
       expect(isUsedToken.toString()).to.be.eql("true", "usdt is used");
 
-      isUsedToken = await storage._isUsedToken(usdc.address);
+      isUsedToken = await storage3._isUsedToken(usdc.address);
       expect(isUsedToken.toString()).to.be.eql("true", "usdc is used");
 
-      isUsedToken = await storage._isUsedToken(usdtn2.address);
+      isUsedToken = await storage3._isUsedToken(usdtn2.address);
       expect(isUsedToken.toString()).to.be.eql("false", "usdtn2 is not used");
     });
   });
@@ -166,13 +220,13 @@ describe("StorageV21", async () => {
   describe("standard scence", async () => {
     it("can not use deposit unknown token address", async () => {
       await expect(
-        storage.connect(Alexander).deposit(1000, other2.address)
+        storage3.connect(Alexander).deposit(1000, other2.address)
       ).to.be.revertedWith("E1");
     });
 
     it("not can used returnToken when small allowance", async () => {
       await expect(
-        storage
+        storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("5"), usdt.address)
       ).to.be.revertedWith("ERC20: transfer amount exceeds balance");
@@ -181,10 +235,10 @@ describe("StorageV21", async () => {
     it("deposit", async () => {
       await usdt
         .connect(Alexander)
-        .approve(storage.address, ethers.utils.parseEther("0.000001"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000001"));
       startTime = await time.latest();
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000001"), usdt.address)
       );
@@ -198,9 +252,9 @@ describe("StorageV21", async () => {
 
       await usdt
         .connect(Dmitry)
-        .approve(storage.address, ethers.utils.parseEther("0.000001"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000001"));
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .deposit(ethers.utils.parseEther("0.000001"), usdt.address)
       );
@@ -210,67 +264,86 @@ describe("StorageV21", async () => {
         transationTime
       );
 
-      balance = await storage.balanceOf(Alexander.address);
+      balance = await storage3.balanceOf(Alexander.address);
       expect(balance.toString()).to.be.eql("999970690000");
-      balance = await storage.balanceOf(Dmitry.address);
+      balance = await storage3.balanceOf(Dmitry.address);
       expect(balance.toString()).to.be.eql("999970690000");
-      balance = await storage.getTokenBalance(usdt.address);
+      balance = await storage3.getTokenBalance(usdt.address);
       expect(balance.toString()).to.be.eql("2000000000000");
     });
 
     it("can not take token more than you have", async () => {
+      const tx = await storage3.setMultiLogicProxy(
+        multiLogicProxyContract.address
+      );
+      await tx.wait(1);
+
       await expect(
-        storage
-          .connect(logicContract)
+        storage3
+          .connect(multiLogicProxyContract)
           .takeToken(ethers.utils.parseEther("0.00001"), usdt.address)
       ).to.be.revertedWith("E18");
     });
 
     it("take token", async () => {
-      await storage.connect(logicContract).takeToken(4000, usdt.address);
-      balance = await usdt.balanceOf(logicContract.address);
+      await storage3
+        .connect(multiLogicProxyContract)
+        .takeToken(4000, usdt.address);
+      balance = await usdt.balanceOf(multiLogicProxyContract.address);
       expect(balance.toString()).to.be.eql("4000");
-      balance = await usdt.balanceOf(storage.address);
+      balance = await usdt.balanceOf(storage3.address);
       expect(balance.toString()).to.be.eql("1999999996000");
     });
 
     it("not can used returnToken when small allowance", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await expect(
-        storage.connect(logicContract).returnToken(5000, usdt.address)
+        storage3
+          .connect(multiLogicProxyContract)
+          .returnToken(5000, usdt.address)
       ).to.be.revertedWith("ERC20: transfer amount exceeds balance");
     });
 
     it("not can used returnToken unknown token address", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await expect(
-        storage.connect(logicContract).returnToken(4000, other2.address)
+        storage3
+          .connect(multiLogicProxyContract)
+          .returnToken(4000, other2.address)
       ).to.be.revertedWith("E1");
     });
 
     it("add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
-      await storage.connect(logicContract).returnToken(4000, usdt.address);
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
+      await storage3
+        .connect(multiLogicProxyContract)
+        .returnToken(4000, usdt.address);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.000002"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.000002"));
       startTime = startTime.add(time.duration.hours(100));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000001"))
       );
       model.distribute(
         Number.parseInt(ethers.utils.parseEther("0.000001").toString()),
         transationTime
       );
-      balance = await storage.balanceEarnBLID(Dmitry.address);
+      balance = await storage3.balanceEarnBLID(Dmitry.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Dmitry.address)),
         10 ** 3
       );
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Alexander.address)),
         10 ** 3
@@ -278,13 +351,14 @@ describe("StorageV21", async () => {
     });
 
     it("second add earn", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
       await usdt
         .connect(Victor)
-        .approve(storage.address, ethers.utils.parseEther("0.000001"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000001"));
       startTime = startTime.add(time.duration.hours(100));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Victor)
           .deposit(ethers.utils.parseEther("0.000001"), usdt.address)
       );
@@ -296,27 +370,28 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(100));
       await time.increaseTo(startTime);
 
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000001"))
       );
       model.distribute(
         Number.parseInt(ethers.utils.parseEther("0.000001").toString()),
         transationTime
       );
-      balance = await storage.balanceEarnBLID(Dmitry.address);
+      balance = await storage3.balanceEarnBLID(Dmitry.address);
 
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Dmitry.address)),
         10 ** 3
       );
-      balance = await storage.balanceEarnBLID(Victor.address);
+      balance = await storage3.balanceEarnBLID(Victor.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Victor.address)),
         10 ** 3
       );
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Alexander.address)),
         10 ** 3
@@ -324,8 +399,8 @@ describe("StorageV21", async () => {
     });
 
     it("take earn", async () => {
-      await storage.connect(Dmitry).interestFee(Dmitry.address);
-      await storage.connect(Victor).interestFee(Victor.address);
+      await storage3.connect(Dmitry).interestFee(Dmitry.address);
+      await storage3.connect(Victor).interestFee(Victor.address);
       model.claim(Dmitry.address);
       model.claim(Victor.address);
       balance = await blid.balanceOf(Victor.address);
@@ -341,70 +416,74 @@ describe("StorageV21", async () => {
         10 ** 3
       );
 
-      balance = await storage.balanceEarnBLID(Dmitry.address);
+      balance = await storage3.balanceEarnBLID(Dmitry.address);
       expect(balance.toString()).to.be.eql("0");
     });
 
     it("withdraw when amount more then have user", async () => {
       await expect(
-        storage.connect(Dmitry).withdraw("999999999999999999", usdt.address)
+        storage3.connect(Dmitry).withdraw("999999999999999999", usdt.address)
       ).to.be.revertedWith("E4");
     });
 
     it("withdraw when amount equal zero", async () => {
       await expect(
-        storage.connect(Dmitry).withdraw("0", usdt.address)
+        storage3.connect(Dmitry).withdraw("0", usdt.address)
       ).to.be.revertedWith("E4");
     });
 
     it("deposit when amount equal zero", async () => {
       await expect(
-        storage.connect(Dmitry).deposit("0", usdt.address)
+        storage3.connect(Dmitry).deposit("0", usdt.address)
       ).to.be.revertedWith("E3");
     });
 
     it("withdraw", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
       startTime = startTime.add(time.duration.hours(100));
       await time.increaseTo(startTime);
       balance = await usdt.balanceOf(Dmitry.address);
       expect(balance.toString()).to.be.eql("999999000000000000");
-      balance = await storage.balanceOf(Dmitry.address);
+      balance = await storage3.balanceOf(Dmitry.address);
       expect(balance.toString()).to.be.eql("999970690000");
-      balance = await usdt.balanceOf(storage.address);
+      balance = await usdt.balanceOf(storage3.address);
       expect(balance.toString()).to.be.eql("3000000000000");
       transationTime = await getTimestampTransaction(
-        await storage.connect(Dmitry).withdraw(3000, usdt.address)
+        await storage3.connect(Dmitry).withdraw(3000, usdt.address)
       );
       balance = await usdt.balanceOf(Dmitry.address);
       expect(balance.toString()).to.be.eql("999999000000003000");
-      balance = await storage.balanceOf(Dmitry.address);
+      balance = await storage3.balanceOf(Dmitry.address);
       expect(balance.toString()).to.be.eql("999970687000");
-      balance = await usdt.balanceOf(storage.address);
+      balance = await usdt.balanceOf(storage3.address);
       expect(balance.toString()).to.be.eql("2999999997000");
     });
 
     it("add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.000002"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.000002"));
       startTime = startTime.add(time.duration.seconds(100));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000001"))
       );
       model.distribute(
         Number.parseInt(ethers.utils.parseEther("0.000001").toString()),
         transationTime
       );
-      balance = await storage.balanceEarnBLID(Dmitry.address);
+      balance = await storage3.balanceEarnBLID(Dmitry.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Dmitry.address)),
         10 ** 3
       );
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Alexander.address)),
         10 ** 3
@@ -414,12 +493,13 @@ describe("StorageV21", async () => {
 
   describe("small seconds scence", async () => {
     before(async () => {
-      const contracts = await deployContracts(owner, logicContract);
+      const contracts = await deployContracts(owner, multiLogicProxyContract);
 
       blid = contracts.blid;
       usdt = contracts.usdt;
       usdtn2 = contracts.usdtn2;
-      storage = contracts.storage;
+      storage3 = contracts.storage3;
+      multiLogicProxy = contracts.multiLogicProxy;
       aggregator = contracts.aggregator;
       aggregator2 = contracts.aggregator2;
       model = contracts.model;
@@ -439,18 +519,18 @@ describe("StorageV21", async () => {
     });
 
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
     });
 
     it("deposit", async () => {
       await usdt
         .connect(Alexander)
-        .approve(storage.address, ethers.utils.parseEther("0.000001"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000001"));
       startTime = await time.latest();
       startTime = startTime.add(time.duration.seconds(20));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000001"), usdt.address)
       );
@@ -463,10 +543,10 @@ describe("StorageV21", async () => {
 
       await usdt
         .connect(Dmitry)
-        .approve(storage.address, ethers.utils.parseEther("0.000001"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000001"));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .deposit(ethers.utils.parseEther("0.000001"), usdt.address)
       );
@@ -476,36 +556,40 @@ describe("StorageV21", async () => {
         transationTime
       );
 
-      balance = await storage.balanceOf(Alexander.address);
+      balance = await storage3.balanceOf(Alexander.address);
       expect(balance.toString()).to.be.eql("999970690000");
-      balance = await storage.balanceOf(Dmitry.address);
+      balance = await storage3.balanceOf(Dmitry.address);
       expect(balance.toString()).to.be.eql("999970690000");
-      balance = await storage.connect(Dmitry).getTokenBalance(usdt.address);
+      balance = await storage3.connect(Dmitry).getTokenBalance(usdt.address);
       expect(balance.toString()).to.be.eql("2000000000000");
     });
 
     it("add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.000002"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.000002"));
       startTime = startTime.add(time.duration.seconds(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000001"))
       );
       model.distribute(
         Number.parseInt(ethers.utils.parseEther("0.000001").toString()),
         transationTime
       );
-      balance = await storage.balanceEarnBLID(Dmitry.address);
+      balance = await storage3.balanceEarnBLID(Dmitry.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Dmitry.address)),
         10000
       );
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Alexander.address)),
         10000
@@ -515,12 +599,13 @@ describe("StorageV21", async () => {
 
   describe("small third scence", async () => {
     before(async () => {
-      const contracts = await deployContracts(owner, logicContract);
+      const contracts = await deployContracts(owner, multiLogicProxyContract);
 
       blid = contracts.blid;
       usdt = contracts.usdt;
       usdtn2 = contracts.usdtn2;
-      storage = contracts.storage;
+      storage3 = contracts.storage3;
+      multiLogicProxy = contracts.multiLogicProxy;
       aggregator = contracts.aggregator;
       aggregator2 = contracts.aggregator2;
       model = contracts.model;
@@ -539,17 +624,17 @@ describe("StorageV21", async () => {
         .transfer(Victor.address, ethers.utils.parseEther("1"));
     });
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
     });
     it("deposit", async () => {
       await usdt
         .connect(Alexander)
-        .approve(storage.address, ethers.utils.parseEther("0.000001"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000001"));
       startTime = await time.latest();
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000001"), usdt.address)
       );
@@ -562,10 +647,10 @@ describe("StorageV21", async () => {
 
       await usdt
         .connect(Dmitry)
-        .approve(storage.address, ethers.utils.parseEther("0.000002"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000002"));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .deposit(ethers.utils.parseEther("0.000002"), usdt.address)
       );
@@ -575,37 +660,41 @@ describe("StorageV21", async () => {
         transationTime
       );
 
-      balance = await storage.balanceOf(Alexander.address);
+      balance = await storage3.balanceOf(Alexander.address);
       expect(balance.toString()).to.be.eql("999970690000");
-      balance = await storage.balanceOf(Dmitry.address);
+      balance = await storage3.balanceOf(Dmitry.address);
       expect(balance.toString()).to.be.eql("1999941380000");
-      balance = await storage.connect(Dmitry).getTokenBalance(usdt.address);
+      balance = await storage3.connect(Dmitry).getTokenBalance(usdt.address);
       expect(balance.toString()).to.be.eql("3000000000000");
     });
 
     it("add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.000002"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.000002"));
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000001"))
       );
       model.distribute(
         Number.parseInt(ethers.utils.parseEther("0.000001").toString()),
         transationTime
       );
-      balance = await storage.balanceEarnBLID(Dmitry.address);
+      balance = await storage3.balanceEarnBLID(Dmitry.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Dmitry.address)),
         10 ** 3
       );
 
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Alexander.address)),
         10 ** 3
@@ -615,12 +704,13 @@ describe("StorageV21", async () => {
 
   describe("new token", async () => {
     before(async () => {
-      const contracts = await deployContracts(owner, logicContract);
+      const contracts = await deployContracts(owner, multiLogicProxyContract);
 
       blid = contracts.blid;
       usdt = contracts.usdt;
       usdtn2 = contracts.usdtn2;
-      storage = contracts.storage;
+      storage3 = contracts.storage3;
+      multiLogicProxy = contracts.multiLogicProxy;
       aggregator = contracts.aggregator;
       aggregator2 = contracts.aggregator2;
       model = contracts.model;
@@ -651,20 +741,20 @@ describe("StorageV21", async () => {
         .transfer(Victor.address, ethers.utils.parseEther("1"));
     });
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
-      await storage
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3
         .connect(owner)
         .addToken(usdtn2.address, aggregator2.address);
     });
     it("deposit", async () => {
       await usdt
         .connect(Alexander)
-        .approve(storage.address, ethers.utils.parseEther("0.000001"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000001"));
       startTime = await time.latest();
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000001"), usdt.address)
       );
@@ -679,10 +769,10 @@ describe("StorageV21", async () => {
     it("deposit", async () => {
       await usdtn2
         .connect(Dmitry)
-        .approve(storage.address, ethers.utils.parseEther("0.000002"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000002"));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .deposit(ethers.utils.parseEther("0.000001"), usdtn2.address)
       );
@@ -692,37 +782,41 @@ describe("StorageV21", async () => {
         transationTime
       );
 
-      balance = await storage.balanceOf(Alexander.address);
+      balance = await storage3.balanceOf(Alexander.address);
       expect(balance.toString()).to.be.eql("999970690000");
-      balance = await storage.balanceOf(Dmitry.address);
+      balance = await storage3.balanceOf(Dmitry.address);
       expect(balance.toString()).to.be.eql("1999941380000");
-      balance = await storage.connect(Dmitry).getTokenBalance(usdt.address);
+      balance = await storage3.connect(Dmitry).getTokenBalance(usdt.address);
       expect(balance.toString()).to.be.eql("1000000000000");
     });
 
     it("add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.000002"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.000002"));
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000001"))
       );
       model.distribute(
         Number.parseInt(ethers.utils.parseEther("0.000001").toString()),
         transationTime
       );
-      balance = await storage.balanceEarnBLID(Dmitry.address);
+      balance = await storage3.balanceEarnBLID(Dmitry.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Dmitry.address)),
         10 ** 3
       );
 
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Alexander.address)),
         10 ** 3
@@ -732,12 +826,13 @@ describe("StorageV21", async () => {
 
   describe("double deposit", async () => {
     before(async () => {
-      const contracts = await deployContracts(owner, logicContract);
+      const contracts = await deployContracts(owner, multiLogicProxyContract);
 
       blid = contracts.blid;
       usdt = contracts.usdt;
       usdtn2 = contracts.usdtn2;
-      storage = contracts.storage;
+      storage3 = contracts.storage3;
+      multiLogicProxy = contracts.multiLogicProxy;
       aggregator = contracts.aggregator;
       aggregator2 = contracts.aggregator2;
       model = contracts.model;
@@ -757,21 +852,21 @@ describe("StorageV21", async () => {
     });
 
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
     });
 
     it("first deposit", async () => {
       await usdt
         .connect(Dmitry)
-        .approve(storage.address, ethers.utils.parseEther("0.000002"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000002"));
       await usdt
         .connect(Alexander)
-        .approve(storage.address, ethers.utils.parseEther("0.000007"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000007"));
       startTime = await time.latest();
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .deposit(ethers.utils.parseEther("0.000001"), usdt.address)
       );
@@ -783,7 +878,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000002"), usdt.address)
       );
@@ -795,15 +890,19 @@ describe("StorageV21", async () => {
     });
 
     it("first add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.00001"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.00001"));
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000001"))
       );
       model.distribute(
@@ -813,10 +912,12 @@ describe("StorageV21", async () => {
     });
 
     it("second deposit", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000002"), usdt.address)
       );
@@ -825,27 +926,29 @@ describe("StorageV21", async () => {
         Number.parseInt(ethers.utils.parseEther("0.000002").toString()),
         transationTime
       );
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
     });
 
     it("second add earn", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
         Number.parseInt(ethers.utils.parseEther("0.000002").toString()),
         transationTime
       );
-      balance = await storage.balanceEarnBLID(Dmitry.address);
+      balance = await storage3.balanceEarnBLID(Dmitry.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Dmitry.address)),
         10 ** 3
       );
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Alexander.address)),
         10 ** 3
@@ -855,12 +958,13 @@ describe("StorageV21", async () => {
 
   describe("double deposit - depositOnBehalf", async () => {
     before(async () => {
-      const contracts = await deployContracts(owner, logicContract);
+      const contracts = await deployContracts(owner, multiLogicProxyContract);
 
       blid = contracts.blid;
       usdt = contracts.usdt;
       usdtn2 = contracts.usdtn2;
-      storage = contracts.storage;
+      storage3 = contracts.storage3;
+      multiLogicProxy = contracts.multiLogicProxy;
       aggregator = contracts.aggregator;
       aggregator2 = contracts.aggregator2;
       model = contracts.model;
@@ -880,21 +984,21 @@ describe("StorageV21", async () => {
     });
 
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
     });
 
     it("first deposit", async () => {
       await usdt
         .connect(owner)
-        .approve(storage.address, ethers.utils.parseEther("0.000002"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000002"));
       await usdt
         .connect(owner)
-        .approve(storage.address, ethers.utils.parseEther("0.000007"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000007"));
       startTime = await time.latest();
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000001"),
@@ -910,7 +1014,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000002"),
@@ -926,15 +1030,19 @@ describe("StorageV21", async () => {
     });
 
     it("first add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.00001"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.00001"));
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000001"))
       );
       model.distribute(
@@ -944,10 +1052,12 @@ describe("StorageV21", async () => {
     });
 
     it("second deposit", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000002"),
@@ -960,27 +1070,29 @@ describe("StorageV21", async () => {
         Number.parseInt(ethers.utils.parseEther("0.000002").toString()),
         transationTime
       );
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
     });
 
     it("second add earn", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
         Number.parseInt(ethers.utils.parseEther("0.000002").toString()),
         transationTime
       );
-      balance = await storage.balanceEarnBLID(Dmitry.address);
+      balance = await storage3.balanceEarnBLID(Dmitry.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Dmitry.address)),
         10 ** 3
       );
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Alexander.address)),
         10 ** 3
@@ -990,12 +1102,13 @@ describe("StorageV21", async () => {
 
   describe("deposit all withdraw addEarn interestFee", async () => {
     before(async () => {
-      const contracts = await deployContracts(owner, logicContract);
+      const contracts = await deployContracts(owner, multiLogicProxyContract);
 
       blid = contracts.blid;
       usdt = contracts.usdt;
       usdtn2 = contracts.usdtn2;
-      storage = contracts.storage;
+      storage3 = contracts.storage3;
+      multiLogicProxy = contracts.multiLogicProxy;
       aggregator = contracts.aggregator;
       aggregator2 = contracts.aggregator2;
       model = contracts.model;
@@ -1014,20 +1127,20 @@ describe("StorageV21", async () => {
         .transfer(Victor.address, ethers.utils.parseEther("1"));
     });
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
     });
     it("first deposit", async () => {
       await usdt
         .connect(Dmitry)
-        .approve(storage.address, ethers.utils.parseEther("0.000002"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000002"));
       await usdt
         .connect(Alexander)
-        .approve(storage.address, ethers.utils.parseEther("0.000007"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000007"));
       startTime = await time.latest();
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .deposit(ethers.utils.parseEther("0.000001"), usdt.address)
       );
@@ -1039,7 +1152,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000002"), usdt.address)
       );
@@ -1052,7 +1165,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .withdraw(ethers.utils.parseEther("0.000001"), usdt.address)
       );
@@ -1071,22 +1184,26 @@ describe("StorageV21", async () => {
     });
 
     it("first add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.00001"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.00001"));
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000001"))
       );
       model.distribute(
         Number.parseInt(ethers.utils.parseEther("0.000001").toString()),
         transationTime
       );
-      await storage.connect(Alexander).interestFee(Alexander.address);
+      await storage3.connect(Alexander).interestFee(Alexander.address);
       model.claim(Alexander.address);
       balance = await blid.balanceOf(Alexander.address);
       expect(Number.parseInt(balance.toString())).closeTo(
@@ -1102,12 +1219,13 @@ describe("StorageV21", async () => {
 
   describe("zero deposit one add earn", async () => {
     before(async () => {
-      const contracts = await deployContracts(owner, logicContract);
+      const contracts = await deployContracts(owner, multiLogicProxyContract);
 
       blid = contracts.blid;
       usdt = contracts.usdt;
       usdtn2 = contracts.usdtn2;
-      storage = contracts.storage;
+      storage3 = contracts.storage3;
+      multiLogicProxy = contracts.multiLogicProxy;
       aggregator = contracts.aggregator;
       aggregator2 = contracts.aggregator2;
       model = contracts.model;
@@ -1126,18 +1244,22 @@ describe("StorageV21", async () => {
         .transfer(Victor.address, ethers.utils.parseEther("1"));
     });
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
     });
     it("first add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.00001"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.00001"));
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       await expect(
-        storage
-          .connect(logicContract)
+        storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000001"))
       ).to.be.revertedWith("E16");
     });
@@ -1145,12 +1267,13 @@ describe("StorageV21", async () => {
 
   describe("two deposit one earn", async () => {
     before(async () => {
-      const contracts = await deployContracts(owner, logicContract);
+      const contracts = await deployContracts(owner, multiLogicProxyContract);
 
       blid = contracts.blid;
       usdt = contracts.usdt;
       usdtn2 = contracts.usdtn2;
-      storage = contracts.storage;
+      storage3 = contracts.storage3;
+      multiLogicProxy = contracts.multiLogicProxy;
       aggregator = contracts.aggregator;
       aggregator2 = contracts.aggregator2;
       model = contracts.model;
@@ -1170,21 +1293,21 @@ describe("StorageV21", async () => {
     });
 
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
     });
 
     it("first deposit", async () => {
       await usdt
         .connect(Dmitry)
-        .approve(storage.address, ethers.utils.parseEther("0.000002"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000002"));
       await usdt
         .connect(Alexander)
-        .approve(storage.address, ethers.utils.parseEther("0.000007"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000007"));
       startTime = await time.latest();
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .deposit(ethers.utils.parseEther("0.000001"), usdt.address)
       );
@@ -1196,7 +1319,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000002"), usdt.address)
       );
@@ -1208,15 +1331,19 @@ describe("StorageV21", async () => {
     });
 
     it("first add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.00001"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.00001"));
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000001"))
       );
       model.distribute(
@@ -1226,10 +1353,12 @@ describe("StorageV21", async () => {
     });
 
     it("second deposit", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000002"), usdt.address)
       );
@@ -1248,12 +1377,13 @@ describe("StorageV21", async () => {
 
   describe("deposit withdraw addEarn interestFee", async () => {
     before(async () => {
-      const contracts = await deployContracts(owner, logicContract);
+      const contracts = await deployContracts(owner, multiLogicProxyContract);
 
       blid = contracts.blid;
       usdt = contracts.usdt;
       usdtn2 = contracts.usdtn2;
-      storage = contracts.storage;
+      storage3 = contracts.storage3;
+      multiLogicProxy = contracts.multiLogicProxy;
       aggregator = contracts.aggregator;
       aggregator2 = contracts.aggregator2;
       model = contracts.model;
@@ -1272,21 +1402,21 @@ describe("StorageV21", async () => {
     });
 
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
     });
 
     it("first deposit", async () => {
       await usdt
         .connect(Dmitry)
-        .approve(storage.address, ethers.utils.parseEther("0.000002"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000002"));
       await usdt
         .connect(Alexander)
-        .approve(storage.address, ethers.utils.parseEther("0.000007"));
+        .approve(storage3.address, ethers.utils.parseEther("0.000007"));
       startTime = await time.latest();
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .deposit(ethers.utils.parseEther("0.000001"), usdt.address)
       );
@@ -1298,7 +1428,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000002"), usdt.address)
       );
@@ -1311,7 +1441,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .withdraw(ethers.utils.parseEther("0.0000005"), usdt.address)
       );
@@ -1326,22 +1456,26 @@ describe("StorageV21", async () => {
     });
 
     it("first add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.00001"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.00001"));
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000001"))
       );
       model.distribute(
         Number.parseInt(ethers.utils.parseEther("0.000001").toString()),
         transationTime
       );
-      await storage.connect(Alexander).interestFee(Alexander.address);
+      await storage3.connect(Alexander).interestFee(Alexander.address);
       model.claim(Alexander.address);
       balance = await blid.balanceOf(Alexander.address);
       expect(Number.parseInt(balance.toString())).closeTo(
@@ -1353,13 +1487,14 @@ describe("StorageV21", async () => {
 
   describe("many deposit", async () => {
     before(async () => {
-      const contracts = await deployContracts(owner, logicContract);
+      const contracts = await deployContracts(owner, multiLogicProxyContract);
 
       blid = contracts.blid;
       usdt = contracts.usdt;
       usdtn2 = contracts.usdtn2;
       usdc = contracts.usdc;
-      storage = contracts.storage;
+      storage3 = contracts.storage3;
+      multiLogicProxy = contracts.multiLogicProxy;
       aggregator = contracts.aggregator;
       aggregator2 = contracts.aggregator2;
       model = contracts.model;
@@ -1394,31 +1529,31 @@ describe("StorageV21", async () => {
     });
 
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
-      await storage.connect(owner).addToken(usdc.address, aggregator2.address);
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdc.address, aggregator2.address);
     });
 
     it("first deposit", async () => {
       await usdt
         .connect(Dmitry)
-        .approve(storage.address, ethers.utils.parseEther("0.00005"));
+        .approve(storage3.address, ethers.utils.parseEther("0.00005"));
       await usdt
         .connect(Alexander)
-        .approve(storage.address, ethers.utils.parseEther("0.00005"));
+        .approve(storage3.address, ethers.utils.parseEther("0.00005"));
 
       await usdc
         .connect(Dmitry)
-        .approve(storage.address, ethers.utils.parseEther("0.00005"));
+        .approve(storage3.address, ethers.utils.parseEther("0.00005"));
       await usdc
         .connect(Alexander)
-        .approve(storage.address, ethers.utils.parseEther("0.00005"));
+        .approve(storage3.address, ethers.utils.parseEther("0.00005"));
       startTime = await time.latest();
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000002"), usdt.address)
       );
@@ -1430,15 +1565,19 @@ describe("StorageV21", async () => {
     });
 
     it("first add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.00001"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.00001"));
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000001"))
       );
       model.distribute(
@@ -1448,10 +1587,12 @@ describe("StorageV21", async () => {
     });
 
     it("deposit", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .deposit(ethers.utils.parseEther("0.000002"), usdc.address)
       );
@@ -1466,7 +1607,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000002"), usdt.address)
       );
@@ -1475,15 +1616,17 @@ describe("StorageV21", async () => {
         Number.parseInt(ethers.utils.parseEther("0.000002").toString()),
         transationTime
       );
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
     });
 
     it("add earn", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -1493,10 +1636,12 @@ describe("StorageV21", async () => {
     });
 
     it("deposit", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000002"), usdt.address)
       );
@@ -1508,10 +1653,12 @@ describe("StorageV21", async () => {
     });
 
     it("deposit", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .deposit(ethers.utils.parseEther("0.000002"), usdc.address)
       );
@@ -1525,11 +1672,13 @@ describe("StorageV21", async () => {
     });
 
     it("add earn", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -1539,10 +1688,12 @@ describe("StorageV21", async () => {
     });
 
     it("deposit", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000002"), usdc.address)
       );
@@ -1559,7 +1710,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .deposit(ethers.utils.parseEther("0.000002"), usdt.address)
       );
@@ -1568,15 +1719,17 @@ describe("StorageV21", async () => {
         Number.parseInt(ethers.utils.parseEther("0.000002").toString()),
         transationTime
       );
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
     });
 
     it("add earn", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -1586,8 +1739,8 @@ describe("StorageV21", async () => {
     });
 
     it("claim", async () => {
-      await storage.connect(Dmitry).interestFee(Dmitry.address);
-      await storage.connect(Alexander).interestFee(Alexander.address);
+      await storage3.connect(Dmitry).interestFee(Dmitry.address);
+      await storage3.connect(Alexander).interestFee(Alexander.address);
       model.claim(Dmitry.address);
       model.claim(Alexander.address);
       balance = await blid.balanceOf(Alexander.address);
@@ -1605,13 +1758,14 @@ describe("StorageV21", async () => {
 
   describe("many deposit - depositOnBehalf", async () => {
     before(async () => {
-      const contracts = await deployContracts(owner, logicContract);
+      const contracts = await deployContracts(owner, multiLogicProxyContract);
 
       blid = contracts.blid;
       usdt = contracts.usdt;
       usdtn2 = contracts.usdtn2;
       usdc = contracts.usdc;
-      storage = contracts.storage;
+      storage3 = contracts.storage3;
+      multiLogicProxy = contracts.multiLogicProxy;
       aggregator = contracts.aggregator;
       aggregator2 = contracts.aggregator2;
       model = contracts.model;
@@ -1646,25 +1800,25 @@ describe("StorageV21", async () => {
     });
 
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
-      await storage.connect(owner).addToken(usdc.address, aggregator2.address);
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdc.address, aggregator2.address);
     });
 
     it("first deposit", async () => {
       await usdt
         .connect(owner)
-        .approve(storage.address, ethers.utils.parseEther("0.0001"));
+        .approve(storage3.address, ethers.utils.parseEther("0.0001"));
 
       await usdc
         .connect(owner)
-        .approve(storage.address, ethers.utils.parseEther("0.0001"));
+        .approve(storage3.address, ethers.utils.parseEther("0.0001"));
       startTime = await time.latest();
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000002"),
@@ -1680,15 +1834,19 @@ describe("StorageV21", async () => {
     });
 
     it("first add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.00001"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.00001"));
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000001"))
       );
       model.distribute(
@@ -1698,10 +1856,12 @@ describe("StorageV21", async () => {
     });
 
     it("deposit", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000002"),
@@ -1720,7 +1880,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000002"),
@@ -1733,15 +1893,17 @@ describe("StorageV21", async () => {
         Number.parseInt(ethers.utils.parseEther("0.000002").toString()),
         transationTime
       );
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
     });
 
     it("add earn", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -1751,10 +1913,12 @@ describe("StorageV21", async () => {
     });
 
     it("deposit", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000002"),
@@ -1770,10 +1934,12 @@ describe("StorageV21", async () => {
     });
 
     it("deposit", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000002"),
@@ -1791,11 +1957,13 @@ describe("StorageV21", async () => {
     });
 
     it("add earn", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -1805,10 +1973,12 @@ describe("StorageV21", async () => {
     });
 
     it("deposit", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000002"),
@@ -1829,7 +1999,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000002"),
@@ -1842,15 +2012,17 @@ describe("StorageV21", async () => {
         Number.parseInt(ethers.utils.parseEther("0.000002").toString()),
         transationTime
       );
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
     });
 
     it("add earn", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -1860,8 +2032,8 @@ describe("StorageV21", async () => {
     });
 
     it("claim", async () => {
-      await storage.connect(Dmitry).interestFee(Dmitry.address);
-      await storage.connect(Alexander).interestFee(Alexander.address);
+      await storage3.connect(Dmitry).interestFee(Dmitry.address);
+      await storage3.connect(Alexander).interestFee(Alexander.address);
       model.claim(Dmitry.address);
       model.claim(Alexander.address);
       balance = await blid.balanceOf(Alexander.address);
@@ -1879,13 +2051,14 @@ describe("StorageV21", async () => {
 
   describe("many deposit two", async () => {
     before(async () => {
-      const contracts = await deployContracts(owner, logicContract);
+      const contracts = await deployContracts(owner, multiLogicProxyContract);
 
       blid = contracts.blid;
       usdt = contracts.usdt;
       usdtn2 = contracts.usdtn2;
       usdc = contracts.usdc;
-      storage = contracts.storage;
+      storage3 = contracts.storage3;
+      multiLogicProxy = contracts.multiLogicProxy;
       aggregator = contracts.aggregator;
       aggregator2 = contracts.aggregator2;
       model = contracts.model;
@@ -1920,29 +2093,29 @@ describe("StorageV21", async () => {
     });
 
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
-      await storage.connect(owner).addToken(usdc.address, aggregator2.address);
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdc.address, aggregator2.address);
     });
 
     it("first deposit", async () => {
       await usdt
         .connect(Dmitry)
-        .approve(storage.address, ethers.utils.parseEther("0.00005"));
+        .approve(storage3.address, ethers.utils.parseEther("0.00005"));
       await usdt
         .connect(Alexander)
-        .approve(storage.address, ethers.utils.parseEther("0.00005"));
+        .approve(storage3.address, ethers.utils.parseEther("0.00005"));
 
       await usdc
         .connect(Dmitry)
-        .approve(storage.address, ethers.utils.parseEther("0.00005"));
+        .approve(storage3.address, ethers.utils.parseEther("0.00005"));
       await usdc
         .connect(Alexander)
-        .approve(storage.address, ethers.utils.parseEther("0.00005"));
+        .approve(storage3.address, ethers.utils.parseEther("0.00005"));
       startTime = await time.latest();
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000002"), usdt.address)
       );
@@ -1954,15 +2127,19 @@ describe("StorageV21", async () => {
     });
 
     it("first add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.00001"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.00001"));
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -1972,10 +2149,12 @@ describe("StorageV21", async () => {
     });
 
     it("deposit", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000002"), usdc.address)
       );
@@ -1989,11 +2168,13 @@ describe("StorageV21", async () => {
     });
 
     it("add earn", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -2003,27 +2184,28 @@ describe("StorageV21", async () => {
     });
 
     it("claim", async () => {
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Alexander.address)),
         10 ** 3
       );
-      balance = await storage.balanceEarnBLID(Dmitry.address);
+      balance = await storage3.balanceEarnBLID(Dmitry.address);
       expect(balance.toString()).to.be.eql("0");
-      await storage.connect(Dmitry).interestFee(Dmitry.address);
-      await storage.connect(Alexander).interestFee(Alexander.address);
+      await storage3.connect(Dmitry).interestFee(Dmitry.address);
+      await storage3.connect(Alexander).interestFee(Alexander.address);
     });
   });
 
   describe("many deposit two - depositOnBehalf", async () => {
     before(async () => {
-      const contracts = await deployContracts(owner, logicContract);
+      const contracts = await deployContracts(owner, multiLogicProxyContract);
 
       blid = contracts.blid;
       usdt = contracts.usdt;
       usdtn2 = contracts.usdtn2;
       usdc = contracts.usdc;
-      storage = contracts.storage;
+      storage3 = contracts.storage3;
+      multiLogicProxy = contracts.multiLogicProxy;
       aggregator = contracts.aggregator;
       aggregator2 = contracts.aggregator2;
       model = contracts.model;
@@ -2058,23 +2240,23 @@ describe("StorageV21", async () => {
     });
 
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
-      await storage.connect(owner).addToken(usdc.address, aggregator2.address);
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdc.address, aggregator2.address);
     });
 
     it("first deposit", async () => {
       await usdt
         .connect(owner)
-        .approve(storage.address, ethers.utils.parseEther("0.0001"));
+        .approve(storage3.address, ethers.utils.parseEther("0.0001"));
 
       await usdc
         .connect(owner)
-        .approve(storage.address, ethers.utils.parseEther("0.0001"));
+        .approve(storage3.address, ethers.utils.parseEther("0.0001"));
       startTime = await time.latest();
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000002"),
@@ -2090,15 +2272,19 @@ describe("StorageV21", async () => {
     });
 
     it("first add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.00001"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.00001"));
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -2108,10 +2294,12 @@ describe("StorageV21", async () => {
     });
 
     it("deposit", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000002"),
@@ -2129,11 +2317,13 @@ describe("StorageV21", async () => {
     });
 
     it("add earn", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -2143,27 +2333,28 @@ describe("StorageV21", async () => {
     });
 
     it("claim", async () => {
-      balance = await storage.balanceEarnBLID(Alexander.address);
+      balance = await storage3.balanceEarnBLID(Alexander.address);
       expect(Number.parseInt(balance.toString())).closeTo(
         Math.floor(model.getEarn(Alexander.address)),
         10 ** 3
       );
-      balance = await storage.balanceEarnBLID(Dmitry.address);
+      balance = await storage3.balanceEarnBLID(Dmitry.address);
       expect(balance.toString()).to.be.eql("0");
-      await storage.connect(Dmitry).interestFee(Dmitry.address);
-      await storage.connect(Alexander).interestFee(Alexander.address);
+      await storage3.connect(Dmitry).interestFee(Dmitry.address);
+      await storage3.connect(Alexander).interestFee(Alexander.address);
     });
   });
 
   describe("deposit addEarn withdraw", async () => {
     before(async () => {
-      const contracts = await deployContracts(owner, logicContract);
+      const contracts = await deployContracts(owner, multiLogicProxyContract);
 
       blid = contracts.blid;
       usdt = contracts.usdt;
       usdtn2 = contracts.usdtn2;
       usdc = contracts.usdc;
-      storage = contracts.storage;
+      storage3 = contracts.storage3;
+      multiLogicProxy = contracts.multiLogicProxy;
       aggregator = contracts.aggregator;
       aggregator2 = contracts.aggregator2;
       model = contracts.model;
@@ -2196,29 +2387,29 @@ describe("StorageV21", async () => {
     });
 
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
-      await storage.connect(owner).addToken(usdc.address, aggregator2.address);
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdc.address, aggregator2.address);
     });
 
     it("first deposit", async () => {
       await usdt
         .connect(Dmitry)
-        .approve(storage.address, ethers.utils.parseEther("0.00005"));
+        .approve(storage3.address, ethers.utils.parseEther("0.00005"));
       await usdt
         .connect(Alexander)
-        .approve(storage.address, ethers.utils.parseEther("0.00005"));
+        .approve(storage3.address, ethers.utils.parseEther("0.00005"));
 
       await usdc
         .connect(Dmitry)
-        .approve(storage.address, ethers.utils.parseEther("0.00005"));
+        .approve(storage3.address, ethers.utils.parseEther("0.00005"));
       await usdc
         .connect(Alexander)
-        .approve(storage.address, ethers.utils.parseEther("0.00005"));
+        .approve(storage3.address, ethers.utils.parseEther("0.00005"));
       startTime = await time.latest();
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000002"), usdt.address)
       );
@@ -2233,7 +2424,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .deposit(ethers.utils.parseEther("0.000004"), usdt.address)
       );
@@ -2245,15 +2436,19 @@ describe("StorageV21", async () => {
     });
 
     it("first add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.00001"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.00001"));
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -2263,10 +2458,12 @@ describe("StorageV21", async () => {
     });
 
     it("deposit", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .deposit(ethers.utils.parseEther("0.000004"), usdc.address)
       );
@@ -2283,7 +2480,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .deposit(ethers.utils.parseEther("0.000004"), usdc.address)
       );
@@ -2297,11 +2494,13 @@ describe("StorageV21", async () => {
     });
 
     it("add earn", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -2311,10 +2510,12 @@ describe("StorageV21", async () => {
     });
 
     it("withdraw", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .withdraw(ethers.utils.parseEther("0.000002"), usdc.address)
       );
@@ -2328,11 +2529,13 @@ describe("StorageV21", async () => {
     });
 
     it("add earn", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -2342,10 +2545,12 @@ describe("StorageV21", async () => {
     });
 
     it("withdraw", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .withdraw(ethers.utils.parseEther("0.000002"), usdc.address)
       );
@@ -2362,7 +2567,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .withdraw(ethers.utils.parseEther("0.000002"), usdt.address)
       );
@@ -2372,7 +2577,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .withdraw(ethers.utils.parseEther("0.000004"), usdc.address)
       );
@@ -2389,7 +2594,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .withdraw(ethers.utils.parseEther("0.000004"), usdt.address)
       );
@@ -2413,13 +2618,14 @@ describe("StorageV21", async () => {
 
   describe("deposit addEarn withdraw - depositOnBehalf", async () => {
     before(async () => {
-      const contracts = await deployContracts(owner, logicContract);
+      const contracts = await deployContracts(owner, multiLogicProxyContract);
 
       blid = contracts.blid;
       usdt = contracts.usdt;
       usdtn2 = contracts.usdtn2;
       usdc = contracts.usdc;
-      storage = contracts.storage;
+      storage3 = contracts.storage3;
+      multiLogicProxy = contracts.multiLogicProxy;
       aggregator = contracts.aggregator;
       aggregator2 = contracts.aggregator2;
       model = contracts.model;
@@ -2452,23 +2658,23 @@ describe("StorageV21", async () => {
     });
 
     it("add tokens", async () => {
-      await storage.connect(owner).addToken(usdt.address, aggregator.address);
-      await storage.connect(owner).addToken(usdc.address, aggregator2.address);
+      await storage3.connect(owner).addToken(usdt.address, aggregator.address);
+      await storage3.connect(owner).addToken(usdc.address, aggregator2.address);
     });
 
     it("first deposit", async () => {
       await usdt
         .connect(owner)
-        .approve(storage.address, ethers.utils.parseEther("0.0001"));
+        .approve(storage3.address, ethers.utils.parseEther("0.0001"));
 
       await usdc
         .connect(owner)
-        .approve(storage.address, ethers.utils.parseEther("0.0001"));
+        .approve(storage3.address, ethers.utils.parseEther("0.0001"));
       startTime = await time.latest();
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000002"),
@@ -2487,7 +2693,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000004"),
@@ -2503,15 +2709,19 @@ describe("StorageV21", async () => {
     });
 
     it("first add earn", async () => {
-      await usdt.connect(logicContract).approve(storage.address, 4000);
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
+      await usdt
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, 4000);
       await blid
-        .connect(logicContract)
-        .approve(storage.address, ethers.utils.parseEther("0.00001"));
+        .connect(multiLogicProxyContract)
+        .approve(storage3.address, ethers.utils.parseEther("0.00001"));
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -2521,10 +2731,12 @@ describe("StorageV21", async () => {
     });
 
     it("deposit", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000004"),
@@ -2545,7 +2757,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(owner)
           .depositOnBehalf(
             ethers.utils.parseEther("0.000004"),
@@ -2563,11 +2775,13 @@ describe("StorageV21", async () => {
     });
 
     it("add earn", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -2577,10 +2791,12 @@ describe("StorageV21", async () => {
     });
 
     it("withdraw", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .withdraw(ethers.utils.parseEther("0.000002"), usdc.address)
       );
@@ -2594,11 +2810,13 @@ describe("StorageV21", async () => {
     });
 
     it("add earn", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxyContract.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
-          .connect(logicContract)
+        await storage3
+          .connect(multiLogicProxyContract)
           .addEarn(ethers.utils.parseEther("0.000002"))
       );
       model.distribute(
@@ -2608,10 +2826,12 @@ describe("StorageV21", async () => {
     });
 
     it("withdraw", async () => {
+      await storage3.setMultiLogicProxy(multiLogicProxy.address);
+
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .withdraw(ethers.utils.parseEther("0.000002"), usdc.address)
       );
@@ -2628,7 +2848,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Alexander)
           .withdraw(ethers.utils.parseEther("0.000002"), usdt.address)
       );
@@ -2638,7 +2858,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .withdraw(ethers.utils.parseEther("0.000004"), usdc.address)
       );
@@ -2655,7 +2875,7 @@ describe("StorageV21", async () => {
       startTime = startTime.add(time.duration.hours(10));
       await time.increaseTo(startTime);
       transationTime = await getTimestampTransaction(
-        await storage
+        await storage3
           .connect(Dmitry)
           .withdraw(ethers.utils.parseEther("0.000004"), usdt.address)
       );
@@ -2676,4 +2896,4 @@ describe("StorageV21", async () => {
       );
     });
   });
-});
+};

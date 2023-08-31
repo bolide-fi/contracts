@@ -23,11 +23,7 @@ contract OlaStatisticsBNBTest is Test {
     uint256 private constant BLOCK_NUMBER = 27_050_910;
 
     function setUp() public {
-        mainnetFork = vm.createSelectFork(
-            // "https://fittest-long-rain.bsc.quiknode.pro/7f4451dcbc844b63681e6eebae1aae68e4953848/",
-            "https://winter-white-dinghy.bsc.discover.quiknode.pro/0b62bfc36b19958bc48e5637735c0e5cf75ec169/",
-            BLOCK_NUMBER
-        );
+        mainnetFork = vm.createSelectFork(vm.rpcUrl("bsc"), BLOCK_NUMBER);
 
         swapGateway = new SwapGateway();
         swapGateway.__SwapGateway_init();
@@ -51,17 +47,12 @@ contract OlaStatisticsBNBTest is Test {
     }
 
     function testGetXTokensInfo() public {
-        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(
-            controller
-        );
+        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(controller);
 
         assertEq(xTokensInfo.length, 10);
     }
 
     function testGetXTokenInfo() public view {
-        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(
-            oBNB,
-            controller
-        );
+        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(oBNB, controller);
     }
 }

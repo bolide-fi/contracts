@@ -18,11 +18,7 @@ contract DForceStatisticsBNBTest is Test {
     uint256 private constant BLOCK_NUMBER = 27_050_910;
 
     function setUp() public {
-        mainnetFork = vm.createSelectFork(
-            // "https://fittest-long-rain.bsc.quiknode.pro/7f4451dcbc844b63681e6eebae1aae68e4953848/",
-            "https://winter-white-dinghy.bsc.discover.quiknode.pro/0b62bfc36b19958bc48e5637735c0e5cf75ec169/",
-            BLOCK_NUMBER
-        );
+        mainnetFork = vm.createSelectFork(vm.rpcUrl("bsc"), BLOCK_NUMBER);
 
         swapGateway = new SwapGateway();
         swapGateway.__SwapGateway_init();
@@ -98,9 +94,7 @@ contract DForceStatisticsBNBTest is Test {
     }
 
     function testGetXTokensInfo() public {
-        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(
-            controller
-        );
+        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(controller);
 
         assertEq(xTokensInfo.length, 28);
     }
@@ -108,30 +102,24 @@ contract DForceStatisticsBNBTest is Test {
     function testGetXTokenInfo() public {
         address iUSDT = 0x0BF8C72d618B5d46b055165e21d661400008fa0F;
 
-        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(
-            iUSDT,
-            controller
-        );
+        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(iUSDT, controller);
 
         assertEq(block.number, BLOCK_NUMBER);
 
         assertEq(xTokenInfo.platformAddress, iUSDT);
         assertEq(xTokenInfo.symbol, "iUSDT");
-        assertEq(
-            xTokenInfo.underlyingAddress,
-            0x55d398326f99059fF775485246999027B3197955
-        );
+        assertEq(xTokenInfo.underlyingAddress, 0x55d398326f99059fF775485246999027B3197955);
         assertEq(xTokenInfo.underlyingSymbol, "USDT");
-        assertEq(xTokenInfo.totalSupply, 2148942247492012914061734);
+        assertEq(xTokenInfo.totalSupply, 2296519944805428384652982);
         assertEq(xTokenInfo.totalBorrows, 1944369619821236732498464);
         assertEq(xTokenInfo.collateralFactor, 850000000000000000);
         assertEq(xTokenInfo.borrowApy, 48157214882473276);
         assertEq(xTokenInfo.supplyApy, 36489814477195346);
         assertEq(xTokenInfo.underlyingPrice, 1000321680000000000);
         assertEq(xTokenInfo.liquidity, 353373249617416689345036);
-        assertEq(xTokenInfo.totalSupplyUSD, 2149633519234186144775929);
+        assertEq(xTokenInfo.totalSupplyUSD, 2297258689341273394855757);
         assertEq(xTokenInfo.totalBorrowsUSD, 1944995084640540827930574);
         assertEq(xTokenInfo.borrowRewardsApy, 10645207442027326);
-        assertEq(xTokenInfo.supplyRewardsApy, 22606847198080582);
+        assertEq(xTokenInfo.supplyRewardsApy, 21138896513210150);
     }
 }

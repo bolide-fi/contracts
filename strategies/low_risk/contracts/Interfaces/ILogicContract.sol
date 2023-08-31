@@ -3,31 +3,19 @@
 pragma solidity ^0.8.13;
 
 interface ILogicContract {
-    function addXTokens(
-        address token,
-        address xToken,
-        uint8 leadingTokenType
-    ) external;
+    function addXTokens(address token, address xToken, uint8 leadingTokenType) external;
 
     function approveTokenForSwap(address token) external;
 
     function claim(address[] calldata xTokens, uint8 leadingTokenType) external;
 
-    function mint(address xToken, uint256 mintAmount)
-        external
-        returns (uint256);
+    function mint(address xToken, uint256 mintAmount) external returns (uint256);
 
-    function borrow(
-        address xToken,
-        uint256 borrowAmount,
-        uint8 leadingTokenType
-    ) external returns (uint256);
+    function borrow(address xToken, uint256 borrowAmount, uint8 leadingTokenType) external returns (uint256);
 
     function repayBorrow(address xToken, uint256 repayAmount) external;
 
-    function redeemUnderlying(address xToken, uint256 redeemAmount)
-        external
-        returns (uint256);
+    function redeemUnderlying(address xToken, uint256 redeemAmount) external returns (uint256);
 
     function swapExactTokensForTokens(
         address swap,
@@ -70,13 +58,7 @@ interface ILogicContract {
         uint256 amountAMin,
         uint256 amountBMin,
         uint256 deadline
-    )
-        external
-        returns (
-            uint256 amountA,
-            uint256 amountB,
-            uint256 liquidity
-        );
+    ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity);
 
     function removeLiquidity(
         address swap,
@@ -96,13 +78,7 @@ interface ILogicContract {
         uint256 amountTokenMin,
         uint256 amountETHMin,
         uint256 deadline
-    )
-        external
-        returns (
-            uint256 amountToken,
-            uint256 amountETH,
-            uint256 liquidity
-        );
+    ) external returns (uint256 amountToken, uint256 amountETH, uint256 liquidity);
 
     function removeLiquidityETH(
         address swap,
@@ -115,9 +91,10 @@ interface ILogicContract {
 
     function addEarnToStorage(uint256 amount) external;
 
-    function enterMarkets(address[] calldata xTokens, uint8 leadingTokenType)
-        external
-        returns (uint256[] memory);
+    function enterMarkets(
+        address[] calldata xTokens,
+        uint8 leadingTokenType
+    ) external returns (uint256[] memory);
 
     function returnTokenToStorage(uint256 amount, address token) external;
 
@@ -125,17 +102,9 @@ interface ILogicContract {
 
     function returnETHToMultiLogicProxy(uint256 amount) external;
 
-    function deposit(
-        address swapMaster,
-        uint256 _pid,
-        uint256 _amount
-    ) external;
+    function deposit(address swapMaster, uint256 _pid, uint256 _amount) external;
 
-    function withdraw(
-        address swapMaster,
-        uint256 _pid,
-        uint256 _amount
-    ) external;
+    function withdraw(address swapMaster, uint256 _pid, uint256 _amount) external;
 
     function returnToken(uint256 amount, address token) external; // for StorageV2 only
 }
@@ -175,31 +144,33 @@ interface ILendingLogic is ILogic {
 
     function getAllMarkets() external view returns (address[] memory);
 
-    function enterMarkets(address[] calldata xTokens)
-        external
-        returns (uint256[] memory);
+    function checkEnteredMarket(address xToken) external view returns (bool);
+
+    function getUnderlyingPrice(address xToken) external view returns (uint256);
+
+    function getUnderlying(address xToken) external view returns (address);
+
+    function getXToken(address token) external view returns (address);
+
+    function getCollateralFactor(address xToken) external view returns (uint256);
+
+    function rewardToken() external view returns (address);
+
+    function enterMarkets(address[] calldata xTokens) external returns (uint256[] memory);
 
     function claim() external;
 
-    function mint(address xToken, uint256 mintAmount)
-        external
-        returns (uint256);
+    function mint(address xToken, uint256 mintAmount) external returns (uint256);
 
-    function borrow(address xToken, uint256 borrowAmount)
-        external
-        returns (uint256);
+    function borrow(address xToken, uint256 borrowAmount) external returns (uint256);
 
-    function repayBorrow(address xToken, uint256 repayAmount)
-        external
-        returns (uint256);
+    function repayBorrow(address xToken, uint256 repayAmount) external returns (uint256);
 
-    function redeemUnderlying(address xToken, uint256 redeemAmount)
-        external
-        returns (uint256);
+    function redeemUnderlying(address xToken, uint256 redeemAmount) external returns (uint256);
 
-    function redeem(address xToken, uint256 redeemTokenAmount)
-        external
-        returns (uint256);
+    function redeem(address xToken, uint256 redeemTokenAmount) external returns (uint256);
+
+    function accrueInterest(address xToken) external;
 }
 
 interface IFarmingLogic is ILogic {
@@ -212,13 +183,7 @@ interface IFarmingLogic is ILogic {
         uint256 amountAMin,
         uint256 amountBMin,
         uint256 deadline
-    )
-        external
-        returns (
-            uint256 amountA,
-            uint256 amountB,
-            uint256 liquidity
-        );
+    ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity);
 
     function removeLiquidity(
         address swap,
@@ -230,15 +195,7 @@ interface IFarmingLogic is ILogic {
         uint256 deadline
     ) external returns (uint256 amountA, uint256 amountB);
 
-    function farmingDeposit(
-        address swapMaster,
-        uint256 _pid,
-        uint256 _amount
-    ) external;
+    function farmingDeposit(address swapMaster, uint256 _pid, uint256 _amount) external;
 
-    function farmingWithdraw(
-        address swapMaster,
-        uint256 _pid,
-        uint256 _amount
-    ) external;
+    function farmingWithdraw(address swapMaster, uint256 _pid, uint256 _amount) external;
 }

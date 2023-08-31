@@ -18,10 +18,7 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
 
     event AddXToken(address token, address xToken);
 
-    function __LendingLogic_init(address _comptroller, address _rainMaker)
-        public
-        initializer
-    {
+    function __LendingLogic_init(address _comptroller, address _rainMaker) public initializer {
         __LendingLogic_init__inherited(_comptroller, _rainMaker);
     }
 
@@ -48,20 +45,13 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
      * @param token Address of Token for deposited
      * @param xToken Address of XToken
      */
-    function addXTokens(address token, address xToken)
-        public
-        virtual
-        onlyOwnerAndAdmin
-    {
+    function addXTokens(address token, address xToken) public virtual onlyOwnerAndAdmin {
         require(xToken != ZERO_ADDRESS, "E20");
         require(_checkMarkets(xToken), "E5");
 
         if ((token) != ZERO_ADDRESS) {
             IERC20Upgradeable(token).approve(xToken, type(uint256).max);
-            IERC20Upgradeable(token).approve(
-                multiLogicProxy,
-                type(uint256).max
-            );
+            IERC20Upgradeable(token).approve(multiLogicProxy, type(uint256).max);
             approveTokenForSwap(swapGateway, token);
 
             XTokens[token] = xToken;
@@ -97,24 +87,16 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
      * @return For each market, returns an error code indicating whether or not it was entered.
      * Each is 0 on success, otherwise an Error code
      */
-    function enterMarkets(address[] calldata xTokens)
-        external
-        override
-        onlyOwnerAndAdmin
-        returns (uint256[] memory)
-    {
+    function enterMarkets(
+        address[] calldata xTokens
+    ) external override onlyOwnerAndAdmin returns (uint256[] memory) {
         return _enterMarkets(xTokens);
     }
 
     /**
      * @notice Check account entered market
      */
-    function checkEnteredMarket(address xToken)
-        external
-        view
-        override
-        returns (bool)
-    {
+    function checkEnteredMarket(address xToken) external view override returns (bool) {
         return _checkEnteredMarket(xToken);
     }
 
@@ -137,13 +119,10 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
      * @param mintAmount: The amount of the asset to be supplied, in units of the underlying asset.
      * @return 0 on success, otherwise an Error code
      */
-    function mint(address xToken, uint256 mintAmount)
-        external
-        override
-        isUsedXToken(xToken)
-        onlyOwnerAndAdmin
-        returns (uint256)
-    {
+    function mint(
+        address xToken,
+        uint256 mintAmount
+    ) external override isUsedXToken(xToken) onlyOwnerAndAdmin returns (uint256) {
         return _mint(xToken, mintAmount);
     }
 
@@ -156,13 +135,10 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
      * @param borrowAmount: The amount of underlying to be borrow.
      * @return 0 on success, otherwise an Error code
      */
-    function borrow(address xToken, uint256 borrowAmount)
-        external
-        override
-        isUsedXToken(xToken)
-        onlyOwnerAndAdmin
-        returns (uint256)
-    {
+    function borrow(
+        address xToken,
+        uint256 borrowAmount
+    ) external override isUsedXToken(xToken) onlyOwnerAndAdmin returns (uint256) {
         return _borrow(xToken, borrowAmount);
     }
 
@@ -173,13 +149,10 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
      * A value of -1 (i.e. 2256 - 1) can be used to repay the full amount.
      * @return 0 on success, otherwise an Error code
      */
-    function repayBorrow(address xToken, uint256 repayAmount)
-        external
-        override
-        isUsedXToken(xToken)
-        onlyOwnerAndAdmin
-        returns (uint256)
-    {
+    function repayBorrow(
+        address xToken,
+        uint256 repayAmount
+    ) external override isUsedXToken(xToken) onlyOwnerAndAdmin returns (uint256) {
         return _repayBorrow(xToken, repayAmount);
     }
 
@@ -194,14 +167,10 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
      * @param redeemAmount: The amount of underlying to be redeemed.
      * @return 0 on success, otherwise an Error code
      */
-    function redeemUnderlying(address xToken, uint256 redeemAmount)
-        external
-        virtual
-        override
-        isUsedXToken(xToken)
-        onlyOwnerAndAdmin
-        returns (uint256)
-    {
+    function redeemUnderlying(
+        address xToken,
+        uint256 redeemAmount
+    ) external virtual override isUsedXToken(xToken) onlyOwnerAndAdmin returns (uint256) {
         return _redeemUnderlying(xToken, redeemAmount);
     }
 
@@ -215,14 +184,10 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
      * @param redeemTokenAmount: The amount of underlying to be redeemed.
      * @return 0 on success, otherwise an Error code
      */
-    function redeem(address xToken, uint256 redeemTokenAmount)
-        external
-        virtual
-        override
-        isUsedXToken(xToken)
-        onlyOwnerAndAdmin
-        returns (uint256)
-    {
+    function redeem(
+        address xToken,
+        uint256 redeemTokenAmount
+    ) external virtual override isUsedXToken(xToken) onlyOwnerAndAdmin returns (uint256) {
         return _redeem(xToken, redeemTokenAmount);
     }
 
@@ -230,31 +195,15 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
         return _rewardToken();
     }
 
-    function getUnderlying(address xToken)
-        external
-        view
-        override
-        returns (address)
-    {
+    function getUnderlying(address xToken) external view override returns (address) {
         return _getUnderlying(xToken);
     }
 
-    function getUnderlyingPrice(address xToken)
-        public
-        view
-        override
-        isUsedXToken(xToken)
-        returns (uint256)
-    {
+    function getUnderlyingPrice(address xToken) public view override isUsedXToken(xToken) returns (uint256) {
         return _getUnderlyingPrice(xToken);
     }
 
-    function getCollateralFactor(address xToken)
-        external
-        view
-        override
-        returns (uint256)
-    {
+    function getCollateralFactor(address xToken) external view override returns (uint256) {
         return _getCollateralFactor(xToken);
     }
 
@@ -264,21 +213,12 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
      * @notice Check if xToken is in market
      * for each strategy, this function should be override
      */
-    function _checkMarkets(address xToken)
-        internal
-        view
-        virtual
-        returns (bool)
-    {}
+    function _checkMarkets(address xToken) internal view virtual returns (bool) {}
 
     /**
      * @notice enterMarket with xToken
      */
-    function _enterMarkets(address[] calldata xTokens)
-        internal
-        virtual
-        returns (uint256[] memory)
-    {
+    function _enterMarkets(address[] calldata xTokens) internal virtual returns (uint256[] memory) {
         return IComptrollerCompound(comptroller).enterMarkets(xTokens);
     }
 
@@ -292,13 +232,9 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
     /**
      * @notice Stake token and mint XToken
      */
-    function _mint(address xToken, uint256 mintAmount)
-        internal
-        virtual
-        returns (uint256)
-    {
+    function _mint(address xToken, uint256 mintAmount) internal virtual returns (uint256) {
         if (xToken == xETH) {
-            IXTokenETH(xToken).mint{value: mintAmount}();
+            IXTokenETH(xToken).mint{ value: mintAmount }();
             return 0;
         }
 
@@ -308,24 +244,16 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
     /**
      * @notice borrow underlying token
      */
-    function _borrow(address xToken, uint256 borrowAmount)
-        internal
-        virtual
-        returns (uint256)
-    {
+    function _borrow(address xToken, uint256 borrowAmount) internal virtual returns (uint256) {
         return IXToken(xToken).borrow(borrowAmount);
     }
 
     /**
      * @notice repayBorrow underlying token
      */
-    function _repayBorrow(address xToken, uint256 repayAmount)
-        internal
-        virtual
-        returns (uint256)
-    {
+    function _repayBorrow(address xToken, uint256 repayAmount) internal virtual returns (uint256) {
         if (xToken == xETH) {
-            IXTokenETH(xToken).repayBorrow{value: repayAmount}();
+            IXTokenETH(xToken).repayBorrow{ value: repayAmount }();
             return 0;
         }
 
@@ -335,22 +263,14 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
     /**
      * @notice redeem underlying staked token
      */
-    function _redeemUnderlying(address xToken, uint256 redeemAmount)
-        internal
-        virtual
-        returns (uint256)
-    {
+    function _redeemUnderlying(address xToken, uint256 redeemAmount) internal virtual returns (uint256) {
         return IXToken(xToken).redeemUnderlying(redeemAmount);
     }
 
     /**
      * @notice redeem underlying staked token
      */
-    function _redeem(address xToken, uint256 redeemTokenAmount)
-        internal
-        virtual
-        returns (uint256)
-    {
+    function _redeem(address xToken, uint256 redeemTokenAmount) internal virtual returns (uint256) {
         return IXToken(xToken).redeem(redeemTokenAmount);
     }
 
@@ -370,55 +290,26 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
     /**
      * @notice Get all entered xTokens to comptroller
      */
-    function _getEnteredMarkets()
-        internal
-        view
-        virtual
-        returns (address[] memory)
-    {
+    function _getEnteredMarkets() internal view virtual returns (address[] memory) {
         return IComptrollerCompound(comptroller).getAssetsIn(address(this));
     }
 
     /**
      * @notice Check account entered market
      */
-    function _checkEnteredMarket(address xToken)
-        internal
-        view
-        virtual
-        returns (bool)
-    {
-        return
-            IComptrollerCompound(comptroller).checkMembership(
-                address(this),
-                xToken
-            );
+    function _checkEnteredMarket(address xToken) internal view virtual returns (bool) {
+        return IComptrollerCompound(comptroller).checkMembership(address(this), xToken);
     }
 
     function _rewardToken() internal view virtual returns (address) {}
 
-    function _getUnderlyingPrice(address xToken)
-        internal
-        view
-        virtual
-        returns (uint256)
-    {}
+    function _getUnderlyingPrice(address xToken) internal view virtual returns (uint256) {}
 
-    function _getUnderlying(address xToken)
-        internal
-        view
-        virtual
-        returns (address)
-    {
+    function _getUnderlying(address xToken) internal view virtual returns (address) {
         return IXToken(xToken).underlying();
     }
 
-    function _getCollateralFactor(address xToken)
-        internal
-        view
-        virtual
-        returns (uint256)
-    {}
+    function _getCollateralFactor(address xToken) internal view virtual returns (uint256) {}
 
     /**
      * @notice accrueInterest

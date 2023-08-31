@@ -18,10 +18,7 @@ contract DForceStatisticsETHTest is Test {
     uint256 private constant BLOCK_NUMBER = 16_791_459;
 
     function setUp() public {
-        mainnetFork = vm.createSelectFork(
-            "https://mainnet.infura.io/v3/985791a172364b08a7850df89e8659a2",
-            BLOCK_NUMBER
-        );
+        mainnetFork = vm.createSelectFork(vm.rpcUrl("mainnet"), BLOCK_NUMBER);
 
         swapGateway = new SwapGateway();
         swapGateway.__SwapGateway_init();
@@ -87,9 +84,7 @@ contract DForceStatisticsETHTest is Test {
     }
 
     function testGetXTokensInfo() public {
-        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(
-            controller
-        );
+        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(controller);
 
         assertEq(xTokensInfo.length, 27);
     }
@@ -97,30 +92,24 @@ contract DForceStatisticsETHTest is Test {
     function testGetXTokenInfo() public {
         address iUSDT = 0x1180c114f7fAdCB6957670432a3Cf8Ef08Ab5354;
 
-        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(
-            iUSDT,
-            controller
-        );
+        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(iUSDT, controller);
 
         assertEq(block.number, BLOCK_NUMBER);
 
         assertEq(xTokenInfo.platformAddress, iUSDT);
         assertEq(xTokenInfo.symbol, "iUSDT");
-        assertEq(
-            xTokenInfo.underlyingAddress,
-            0xdAC17F958D2ee523a2206206994597C13D831ec7
-        );
+        assertEq(xTokenInfo.underlyingAddress, 0xdAC17F958D2ee523a2206206994597C13D831ec7);
         assertEq(xTokenInfo.underlyingSymbol, "USDT");
-        assertEq(xTokenInfo.totalSupply, 1368062531435);
+        assertEq(xTokenInfo.totalSupply, 1433592937186);
         assertEq(xTokenInfo.totalBorrows, 925143912500);
         assertEq(xTokenInfo.collateralFactor, 850000000000000000);
         assertEq(xTokenInfo.borrowApy, 36500398230316274);
         assertEq(xTokenInfo.supplyApy, 21040391138588430);
         assertEq(xTokenInfo.underlyingPrice, 999900000000000000);
         assertEq(xTokenInfo.liquidity, 508594484462100300000000);
-        assertEq(xTokenInfo.totalSupplyUSD, 1367925725181856500000000);
+        assertEq(xTokenInfo.totalSupplyUSD, 1433449577892281400000000);
         assertEq(xTokenInfo.totalBorrowsUSD, 925051398108750000000000);
         assertEq(xTokenInfo.borrowRewardsApy, 24398129389967832);
-        assertEq(xTokenInfo.supplyRewardsApy, 38767593792911966);
+        assertEq(xTokenInfo.supplyRewardsApy, 36963247813895115);
     }
 }

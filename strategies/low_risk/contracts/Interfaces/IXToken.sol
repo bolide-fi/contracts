@@ -15,22 +15,11 @@ interface IXToken {
 
     function borrowBalanceCurrent(address account) external returns (uint256);
 
-    function getAccountSnapshot(address account)
-        external
-        view
-        returns (
-            uint256,
-            uint256,
-            uint256,
-            uint256
-        );
+    function getAccountSnapshot(address account) external view returns (uint256, uint256, uint256, uint256);
 
     function underlying() external view returns (address);
 
-    function borrowBalanceStored(address account)
-        external
-        view
-        returns (uint256);
+    function borrowBalanceStored(address account) external view returns (uint256);
 
     function exchangeRateStored() external view returns (uint256);
 
@@ -51,6 +40,8 @@ interface IXToken {
     function totalSupply() external view returns (uint256);
 
     function totalBorrows() external view returns (uint256);
+
+    function accrueInterest() external returns (uint256);
 }
 
 interface IXTokenETH {

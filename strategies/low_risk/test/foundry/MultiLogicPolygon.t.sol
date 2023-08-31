@@ -3,11 +3,13 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
+import "../../contracts/utils/UUPSProxy.sol";
 import "../../contracts/SwapGateway.sol";
 import "../../contracts/MultiLogic.sol";
+import "../../contracts/StorageV3.sol";
 import "../../contracts/strategies/lbl/dforce/DForceStatistics.sol";
-import "../../contracts/strategies/lbl/dforce/DForceStrategy.sol";
 import "../../contracts/strategies/lbl/dforce/DForceLogic.sol";
+import "../../contracts/strategies/lbl/LendBorrowLendStrategy.sol";
 import "../../contracts/interfaces/IXToken.sol";
 import "../../contracts/interfaces/IStrategyStatistics.sol";
 import "../../contracts/interfaces/IStorage.sol";
@@ -26,6 +28,10 @@ interface IStorageTest {
     function addToken(address _token, address _oracles) external;
 
     function setMultiLogicProxy(address) external;
+
+    function setBLID(address) external;
+
+    function setOracleDeviationLimit(uint256) external;
 }
 
 contract MultiLogicPolygonTest is Test {
@@ -37,9 +43,11 @@ contract MultiLogicPolygonTest is Test {
     MultiLogic public multiLogic;
 
     DForceLogic strategyLogic1;
-    DForceStrategy strategy1;
+    LendBorrowLendStrategy strategy1;
     DForceLogic strategyLogic2;
-    DForceStrategy strategy2;
+    LendBorrowLendStrategy strategy2;
+    DForceLogic strategyLogic3;
+    LendBorrowLendStrategy strategy3;
 
     SwapInfo swapInfo;
 
@@ -56,6 +64,7 @@ contract MultiLogicPolygonTest is Test {
     address _storage = 0x102103ca65D53387A9B4186B15D9bb75D0b135cC;
     address logic1;
     address logic2;
+    address logic3;
 
     address iUSDT = 0xb3ab7148cCCAf66686AD6C1bE24D83e58E6a504e;
     address iUSDC = 0x5268b3c4afb0860D365a093C184985FCFcb65234;
@@ -73,11 +82,11 @@ contract MultiLogicPolygonTest is Test {
     address rewardsToken = DF;
 
     function setUp() public {
-        mainnetFork = vm.createSelectFork(
-            "https://polygon-rpc.com",
-            BLOCK_NUMBER
-        );
+        mainnetFork = vm.createSelectFork(vm.rpcUrl("polygon"), BLOCK_NUMBER);
         vm.startPrank(owner);
+
+        // Storage
+        _initializeProxy();
 
         // MultiLogic
         multiLogic = new MultiLogic();
@@ -167,8 +176,21 @@ contract MultiLogicPolygonTest is Test {
         strategyLogic2.approveTokenForSwap(address(swapGateway), USDC);
         logic2 = address(strategyLogic2);
 
+        strategyLogic3 = new DForceLogic();
+        strategyLogic3.__LendingLogic_init(comptroller, rainMaker);
+
+        strategyLogic3.setExpenseAddress(expense);
+        strategyLogic3.setMultiLogicProxy(multiLogicProxy);
+        strategyLogic3.setBLID(blid);
+        strategyLogic3.setSwapGateway(address(swapGateway));
+
+        strategyLogic3.approveTokenForSwap(address(swapGateway), blid);
+        strategyLogic3.approveTokenForSwap(address(swapGateway), DF);
+        strategyLogic3.approveTokenForSwap(address(swapGateway), USDC);
+        logic3 = address(strategyLogic3);
+
         // strategy
-        strategy1 = new DForceStrategy();
+        strategy1 = new LendBorrowLendStrategy();
         strategy1.__Strategy_init(comptroller, logic1);
 
         strategy1.setBLID(blid);
@@ -180,13 +202,11 @@ contract MultiLogicPolygonTest is Test {
         strategy1.setRebalanceParameter(_borrowRateMin, _borrowRateMax);
         strategy1.setMinBLIDPerRewardsToken(0);
         strategyLogic1.setAdmin(address(strategy1));
-        strategy1.setRewardsTokenPriceDeviationLimit(
-            (1 ether) / uint256(100 * 86400)
-        ); // 1% / 1day
+        strategy1.setRewardsTokenPriceDeviationLimit((1 ether) / uint256(100 * 86400)); // 1% / 1day
         strategy1.setMinStorageAvailable(10000);
         strategy1.setMinRewardsSwapLimit(1000000);
 
-        strategy2 = new DForceStrategy();
+        strategy2 = new LendBorrowLendStrategy();
         strategy2.__Strategy_init(comptroller, logic2);
 
         strategy2.setBLID(blid);
@@ -198,11 +218,32 @@ contract MultiLogicPolygonTest is Test {
         strategy2.setRebalanceParameter(_borrowRateMin, _borrowRateMax);
         strategy2.setMinBLIDPerRewardsToken(0);
         strategyLogic2.setAdmin(address(strategy2));
-        strategy2.setRewardsTokenPriceDeviationLimit(
-            (1 ether) / uint256(100 * 86400)
-        ); // 1% / 1day
+        strategy2.setRewardsTokenPriceDeviationLimit((1 ether) / uint256(100 * 86400)); // 1% / 1day
         strategy2.setMinStorageAvailable(10000);
         strategy2.setMinRewardsSwapLimit(1000000);
+
+        strategy3 = new LendBorrowLendStrategy();
+        strategy3.__Strategy_init(comptroller, logic3);
+
+        strategy3.setBLID(blid);
+        strategy3.setMultiLogicProxy(multiLogicProxy);
+        strategy3.setStrategyStatistics(address(statistics));
+        strategy3.setCirclesCount(_circlesCount);
+        strategy3.setAvoidLiquidationFactor(5);
+        strategy3.setMinStorageAvailable(300000000);
+        strategy3.setRebalanceParameter(_borrowRateMin, _borrowRateMax);
+        strategy3.setMinBLIDPerRewardsToken(0);
+        strategyLogic3.setAdmin(address(strategy3));
+        strategy3.setRewardsTokenPriceDeviationLimit((1 ether) / uint256(100 * 86400)); // 1% / 1day
+        strategy3.setMinStorageAvailable(10000);
+        strategy3.setMinRewardsSwapLimit(1000000);
+
+        // Storage init
+        IStorageTest(_storage).setBLID(blid);
+        IStorageTest(_storage).setMultiLogicProxy(address(multiLogic));
+        IStorageTest(_storage).addToken(ZERO_ADDRESS, 0xAB594600376Ec9fD91F8e885dADF0CE036862dE0);
+        IStorageTest(_storage).addToken(USDT, 0x0A6513e40db6EB1b165753AD52E80663aeA50545);
+        IStorageTest(_storage).setOracleDeviationLimit(1 ether);
 
         // MultiLogicProxy Init
         MultiLogic.singleStrategy memory strategyInfo1;
@@ -216,8 +257,7 @@ contract MultiLogicPolygonTest is Test {
         string[] memory _strategyName = new string[](2);
         _strategyName[0] = "USDT_USDT";
         _strategyName[1] = "USDT_USDC";
-        MultiLogic.singleStrategy[]
-            memory _multiStrategy = new MultiLogic.singleStrategy[](2);
+        MultiLogic.singleStrategy[] memory _multiStrategy = new MultiLogic.singleStrategy[](2);
         _multiStrategy[0] = strategyInfo1;
         _multiStrategy[1] = strategyInfo2;
 
@@ -327,6 +367,62 @@ contract MultiLogicPolygonTest is Test {
         swapInfo.paths[0][0] = USDT;
         swapInfo.paths[0][1] = blid;
         strategy2.setSwapInfo(swapInfo, 4);
+
+        // Strategy 3 init
+        strategy3.setStrategyXToken(iDAI);
+        strategy3.setSupplyXToken(iUSDT);
+
+        swapInfo.swapRouters = new address[](2);
+        swapInfo.swapRouters[0] = uniswapV3Router;
+        swapInfo.swapRouters[1] = quickswapV3Router;
+        swapInfo.paths = new address[][](2);
+        swapInfo.paths[0] = new address[](3);
+        swapInfo.paths[0][0] = DF;
+        swapInfo.paths[0][1] = USDC;
+        swapInfo.paths[0][2] = USDT;
+        swapInfo.paths[1] = new address[](2);
+        swapInfo.paths[1][0] = USDT;
+        swapInfo.paths[1][1] = blid;
+        strategy3.setSwapInfo(swapInfo, 0);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = uniswapV3Router;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](3);
+        swapInfo.paths[0][0] = DF;
+        swapInfo.paths[0][1] = USDC;
+        swapInfo.paths[0][2] = DAI;
+        strategy3.setSwapInfo(swapInfo, 1);
+
+        swapInfo.swapRouters = new address[](2);
+        swapInfo.swapRouters[0] = uniswapV3Router;
+        swapInfo.swapRouters[1] = quickswapV3Router;
+        swapInfo.paths = new address[][](2);
+        swapInfo.paths[0] = new address[](3);
+        swapInfo.paths[0][0] = DAI;
+        swapInfo.paths[0][1] = USDC;
+        swapInfo.paths[0][2] = USDT;
+        swapInfo.paths[1] = new address[](2);
+        swapInfo.paths[1][0] = USDT;
+        swapInfo.paths[1][1] = blid;
+        strategy3.setSwapInfo(swapInfo, 2);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = uniswapV3Router;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](3);
+        swapInfo.paths[0][0] = DAI;
+        swapInfo.paths[0][1] = USDC;
+        swapInfo.paths[0][2] = USDT;
+        strategy3.setSwapInfo(swapInfo, 3);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = quickswapV3Router;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](2);
+        swapInfo.paths[0][0] = USDT;
+        swapInfo.paths[0][1] = blid;
+        strategy3.setSwapInfo(swapInfo, 4);
 
         vm.stopPrank();
     }
@@ -517,7 +613,7 @@ contract MultiLogicPolygonTest is Test {
         vm.stopPrank();
     }
 
-    function test_setPercentageDivision() public {
+    function test_SetPercentageOddDivision() public {
         vm.startPrank(owner);
 
         console.log("---- Deposit to storage (odd) ----");
@@ -537,11 +633,242 @@ contract MultiLogicPolygonTest is Test {
         vm.stopPrank();
     }
 
+    function test_AddStrategy() public {
+        vm.startPrank(owner);
+
+        console.log("---- Deposit to storage ----");
+        IStorageTest(_storage).deposit(100000, USDT);
+
+        console.log("---- Check token available ----");
+        assertEq(_getAvailable(logic1), 40000);
+        assertEq(_getAvailable(logic2), 60000);
+        assertEq(_getBalance(logic1), 0);
+        assertEq(_getBalance(logic2), 0);
+
+        console.log("---- Build strategy 1 ----");
+        strategy1.useToken();
+        strategy1.rebalance();
+
+        assertEq(_getAvailable(logic1), 0);
+        assertEq(_getAvailable(logic2), 60000);
+        assertEq(_getBalance(logic1), 40000);
+        assertEq(_getBalance(logic2), 0);
+
+        console.log("---- Build strategy 2 ----");
+        strategy2.useToken();
+        strategy2.rebalance();
+
+        assertEq(_getAvailable(logic1), 0);
+        assertEq(_getAvailable(logic2), 0);
+        assertEq(_getBalance(logic1), 40000);
+        assertEq(_getBalance(logic2), 60000);
+
+        vm.warp(block.timestamp + 2000);
+        vm.roll(block.number + 999999);
+
+        console.log("---- Deposit to storage ----");
+        IStorageTest(_storage).deposit(100000, USDT);
+        assertEq(_getAvailable(logic1), 40000);
+        assertEq(_getAvailable(logic2), 60000);
+        assertEq(_getBalance(logic1), 40000);
+        assertEq(_getBalance(logic2), 60000);
+        assertEq(IStorage(_storage).getTokenBalance(USDT), 100000000000000000);
+
+        console.log("---- Add new strategy ----");
+        MultiLogic.singleStrategy memory strategyInfo3;
+        strategyInfo3.logicContract = logic3;
+        strategyInfo3.strategyContract = address(strategy3);
+        multiLogic.addStrategy("USDT_DAI", strategyInfo3, false);
+
+        assertEq(_getAvailable(logic1), 40000);
+        assertEq(_getAvailable(logic2), 60000);
+        assertEq(_getAvailable(logic3), 0);
+        assertEq(_getBalance(logic1), 40000);
+        assertEq(_getBalance(logic2), 60000);
+        assertEq(_getBalance(logic3), 0);
+
+        console.log("---- Update percentage ----");
+
+        uint256[] memory percentages = new uint256[](3);
+        percentages[0] = 5000;
+        percentages[1] = 2000;
+        percentages[2] = 3000;
+        multiLogic.setPercentages(USDT, percentages);
+
+        assertEq(_getAvailable(logic1), 60000);
+        assertEq(_getAvailable(logic2), 0);
+        assertEq(_getAvailable(logic3), 60000);
+        assertEq(_getBalance(logic1), 40000);
+        assertEq(_getBalance(logic2), 40000);
+        assertEq(_getBalance(logic3), 0);
+        assertEq(IERC20MetadataUpgradeable(USDT).balanceOf(_storage), 120000);
+        assertEq(IStorage(_storage).getTokenBalance(USDT), 120000000000000000);
+
+        console.log("---- Use Token ----");
+        strategy1.useToken();
+        strategy2.useToken();
+        strategy3.useToken();
+
+        assertEq(_getAvailable(logic1), 0);
+        assertEq(_getAvailable(logic2), 0);
+        assertEq(_getAvailable(logic3), 0);
+        assertEq(_getBalance(logic1), 100000);
+        assertEq(_getBalance(logic2), 40000);
+        assertEq(_getBalance(logic3), 60000);
+
+        console.log("---- Withdraw All ----");
+        vm.warp(block.timestamp + 2000);
+        vm.roll(block.number + 999999);
+
+        IStorageTest(_storage).withdraw(200000, USDT);
+
+        vm.stopPrank();
+    }
+
+    function test_DeactivateStrategy() public {
+        uint256[] memory percentages = new uint256[](3);
+
+        vm.startPrank(owner);
+
+        console.log("---- Add new strategy ----");
+        MultiLogic.singleStrategy memory strategyInfo3;
+        strategyInfo3.logicContract = logic3;
+        strategyInfo3.strategyContract = address(strategy3);
+        multiLogic.addStrategy("USDT_DAI", strategyInfo3, false);
+
+        console.log("---- Update percentage ----");
+
+        percentages[0] = 5000;
+        percentages[1] = 2000;
+        percentages[2] = 3000;
+        multiLogic.setPercentages(USDT, percentages);
+
+        console.log("---- Deposit to storage ----");
+        IStorageTest(_storage).deposit(100000, USDT);
+
+        console.log("---- Check token available ----");
+        assertEq(_getAvailable(logic1), 50000);
+        assertEq(_getAvailable(logic2), 20000);
+        assertEq(_getAvailable(logic3), 30000);
+        assertEq(_getBalance(logic1), 0);
+        assertEq(_getBalance(logic2), 0);
+        assertEq(_getBalance(logic3), 0);
+
+        console.log("---- Build strategy ----");
+        strategy1.useToken();
+        strategy2.useToken();
+        strategy3.useToken();
+        strategy1.rebalance();
+        strategy2.rebalance();
+        strategy3.rebalance();
+
+        assertEq(_getAvailable(logic1), 0);
+        assertEq(_getAvailable(logic2), 0);
+        assertEq(_getAvailable(logic3), 0);
+        assertEq(_getBalance(logic1), 50000);
+        assertEq(_getBalance(logic2), 20000);
+        assertEq(_getBalance(logic3), 30000);
+
+        console.log("---- Deposit to storage ----");
+        IStorageTest(_storage).deposit(100000, USDT);
+
+        assertEq(_getAvailable(logic1), 50000);
+        assertEq(_getAvailable(logic2), 20000);
+        assertEq(_getAvailable(logic3), 30000);
+        assertEq(_getBalance(logic1), 50000);
+        assertEq(_getBalance(logic2), 20000);
+        assertEq(_getBalance(logic3), 30000);
+        assertEq(IStorage(_storage).getTokenBalance(USDT), 100000000000000000);
+
+        console.log("---- Deactivate strategy ----");
+        vm.warp(block.timestamp + 2000);
+        vm.roll(block.number + 999999);
+
+        multiLogic.deactivateStrategy("USDT_DAI");
+
+        percentages = multiLogic.getPercentage(USDT);
+        assertEq(percentages[0], 7142);
+        assertEq(percentages[1], 2858);
+        assertEq(percentages[2], 0);
+
+        assertEq(_getAvailable(logic1), 92840);
+        assertEq(_getAvailable(logic2), 37160);
+        assertEq(_getAvailable(logic3), 0);
+        assertEq(_getBalance(logic1), 50000);
+        assertEq(_getBalance(logic2), 20000);
+        assertEq(_getBalance(logic3), 0);
+        assertEq(IStorage(_storage).getTokenBalance(USDT), 130000000000000000);
+
+        console.log("---- Deactivate strategy ----");
+        vm.warp(block.timestamp + 2000);
+        vm.roll(block.number + 999999);
+
+        multiLogic.deactivateStrategy("USDT_USDC");
+
+        percentages = multiLogic.getPercentage(USDT);
+        assertEq(percentages[0], 10000);
+        assertEq(percentages[1], 0);
+        assertEq(percentages[2], 0);
+
+        assertEq(_getAvailable(logic1), 150000);
+        assertEq(_getAvailable(logic2), 0);
+        assertEq(_getAvailable(logic3), 0);
+        assertEq(_getBalance(logic1), 50000);
+        assertEq(_getBalance(logic2), 0);
+        assertEq(_getBalance(logic3), 0);
+        assertEq(IStorage(_storage).getTokenBalance(USDT), 150000000000000000);
+
+        console.log("---- Deactivate strategy ----");
+        vm.warp(block.timestamp + 2000);
+        vm.roll(block.number + 999999);
+
+        multiLogic.deactivateStrategy("USDT_USDT");
+
+        percentages = multiLogic.getPercentage(USDT);
+        assertEq(percentages[0], 0);
+        assertEq(percentages[1], 0);
+        assertEq(percentages[2], 0);
+
+        assertEq(_getAvailable(logic1), 0);
+        assertEq(_getAvailable(logic2), 0);
+        assertEq(_getAvailable(logic3), 0);
+        assertEq(_getBalance(logic1), 0);
+        assertEq(_getBalance(logic2), 0);
+        assertEq(_getBalance(logic3), 0);
+        assertEq(IStorage(_storage).getTokenBalance(USDT), 200000000000000000);
+
+        console.log("---- Withdraw All ----");
+        vm.warp(block.timestamp + 2000);
+        vm.roll(block.number + 999999);
+
+        IStorageTest(_storage).withdraw(200000, USDT);
+
+        vm.stopPrank();
+    }
+
     function _getAvailable(address logic) private view returns (uint256) {
         return multiLogic.getTokenAvailable(USDT, logic);
     }
 
     function _getBalance(address logic) private view returns (uint256) {
         return multiLogic.getTokenTaken(USDT, logic);
+    }
+
+    function _initializeProxy() private {
+        /* Use UUPXProxy pattern for oppenzeppelin initializer
+         * - in UpgradeableBse _initialize has "initializer" modifier
+         * - in DForceLogic __Logic_init doesn't have "initializer" modifer
+         * - import "../../../contracts/utils/UUPSProxy.sol";
+         */
+
+        UUPSProxy storageProxy;
+        StorageV3 storageImple;
+        StorageV3 storageContract;
+        storageImple = new StorageV3();
+        storageProxy = new UUPSProxy(address(storageImple), "");
+        storageContract = StorageV3(payable(address(storageProxy)));
+        storageContract.initialize();
+
+        _storage = address(storageContract);
     }
 }

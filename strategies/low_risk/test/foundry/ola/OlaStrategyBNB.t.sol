@@ -8,8 +8,8 @@ import "../../../contracts/SwapGateway.sol";
 import "../../../contracts/MultiLogic.sol";
 import "../../../contracts/StorageV3.sol";
 import "../../../contracts/strategies/lbl/ola/OlaStatistics.sol";
-import "../../../contracts/strategies/lbl/ola/OlaStrategy.sol";
 import "../../../contracts/strategies/lbl/ola/OlaLogic.sol";
+import "../../../contracts/strategies/lbl/LendBorrowLendStrategy.sol";
 import "../../../contracts/interfaces/IXToken.sol";
 import "../../../contracts/interfaces/IStrategyStatistics.sol";
 import "../../../contracts/interfaces/IStorage.sol";
@@ -51,10 +51,10 @@ contract OlaStrategyBNBTest is Test {
     SwapGateway public swapGateway;
 
     OlaLogic strategyLogic;
-    OlaStrategy strategy;
+    LendBorrowLendStrategy strategy;
     SwapInfo swapInfo;
 
-    uint256 private constant BLOCK_NUMBER = 27_951_245;
+    uint256 private constant BLOCK_NUMBER = 29298135; // 27_951_245;
     address private constant ZERO_ADDRESS = address(0);
     address expense = 0xa7e21fabEC16A185Acae3AB3d004DF84b23C3501;
     address comptroller = 0xAD48B2C9DC6709a560018c678e918253a65df86e;
@@ -69,9 +69,13 @@ contract OlaStrategyBNBTest is Test {
     address oUSDT = 0xdBFd516D42743CA3f1C555311F7846095D85F6Fd;
     address oBNB = 0x34878F6a484005AA90E7188a546Ea9E52b538F6f;
     address oBUSD = 0x0096B6B49D13b347033438c4a699df3Afd9d2f96;
+    address oCAKE = 0x3353f5bcfD7E4b146F2eD8F1e8D875733Cd754a7;
+    address oETH = 0xaA1b1E1f251610aE10E4D553b05C662e60992EEd;
     address BNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
     address USDT = 0x55d398326f99059fF775485246999027B3197955;
     address BUSD = 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56;
+    address CAKE = 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82;
+    address ETH = 0x2170Ed0880ac9A755fd29B2688956BD959F933F8;
     address BANANA = 0x603c7f932ED1fc6575303D8Fb018fDCBb0f39a95;
 
     uint256 _borrowRateMin = 600000000000000000;
@@ -80,12 +84,7 @@ contract OlaStrategyBNBTest is Test {
     address rewardsToken = BANANA;
 
     function setUp() public {
-        mainnetFork = vm.createSelectFork(
-            // "https://fittest-long-rain.bsc.quiknode.pro/7f4451dcbc844b63681e6eebae1aae68e4953848/",
-            // "https://winter-white-dinghy.bsc.discover.quiknode.pro/0b62bfc36b19958bc48e5637735c0e5cf75ec169/",
-            "https://bsc-dataseed.binance.org/",
-            BLOCK_NUMBER
-        );
+        mainnetFork = vm.createSelectFork(vm.rpcUrl("bsc"), BLOCK_NUMBER);
         vm.startPrank(owner);
 
         // Storage
@@ -126,6 +125,8 @@ contract OlaStrategyBNBTest is Test {
 
         statistics.setPriceOracle(BUSD, 0xcBb98864Ef56E9042e7d2efef76141f15731B82f); // BUSD
 
+        statistics.setPriceOracle(ETH, 0x9ef1B8c0E4F7dc8bF5719Ea496883DC6401d5b2e); // ETH
+
         // strategyLogic
         strategyLogic = new OlaLogic();
         strategyLogic.__LendingLogic_init(comptroller, rainMaker);
@@ -140,7 +141,7 @@ contract OlaStrategyBNBTest is Test {
         strategyLogic.approveTokenForSwap(address(swapGateway), BANANA);
 
         // strategy
-        strategy = new OlaStrategy();
+        strategy = new LendBorrowLendStrategy();
         strategy.__Strategy_init(comptroller, logic);
 
         strategy.setBLID(blid);
@@ -233,15 +234,6 @@ contract OlaStrategyBNBTest is Test {
     function test_USDT_BUSD() public {
         vm.startPrank(owner);
 
-        uint256 blidExpense;
-        uint256 blidStorage;
-        uint256 blidExpenseNew;
-        uint256 blidStorageNew;
-        uint256 BANANA_balance;
-
-        XTokenInfo memory tokenInfo;
-        XTokenInfo memory supplyTokenInfo;
-
         // Configuration
         strategy.setStrategyXToken(oBUSD);
         strategy.setSupplyXToken(oUSDT);
@@ -296,10 +288,69 @@ contract OlaStrategyBNBTest is Test {
         vm.stopPrank();
     }
 
-    function test_BNB_BNB() public {
+    function test_USDT_ETH() public {
         vm.startPrank(owner);
 
-        XTokenInfo memory tokenInfo;
+        // Configuration
+        strategy.setStrategyXToken(oETH);
+        strategy.setSupplyXToken(oUSDT);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = apeSwapRouter;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](5);
+        swapInfo.paths[0][0] = BANANA;
+        swapInfo.paths[0][1] = ZERO_ADDRESS;
+        swapInfo.paths[0][2] = BUSD;
+        swapInfo.paths[0][3] = USDT;
+        swapInfo.paths[0][4] = blid;
+        strategy.setSwapInfo(swapInfo, 0);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = apeSwapRouter;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](3);
+        swapInfo.paths[0][0] = BANANA;
+        swapInfo.paths[0][1] = ZERO_ADDRESS;
+        swapInfo.paths[0][2] = ETH;
+        strategy.setSwapInfo(swapInfo, 1);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = apeSwapRouter;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](5);
+        swapInfo.paths[0][0] = ETH;
+        swapInfo.paths[0][1] = ZERO_ADDRESS;
+        swapInfo.paths[0][2] = BUSD;
+        swapInfo.paths[0][3] = USDT;
+        swapInfo.paths[0][4] = blid;
+        strategy.setSwapInfo(swapInfo, 2);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = apeSwapRouter;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](4);
+        swapInfo.paths[0][0] = ETH;
+        swapInfo.paths[0][1] = ZERO_ADDRESS;
+        swapInfo.paths[0][2] = BUSD;
+        swapInfo.paths[0][3] = USDT;
+        strategy.setSwapInfo(swapInfo, 3);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = apeSwapRouter;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](2);
+        swapInfo.paths[0][0] = USDT;
+        swapInfo.paths[0][1] = blid;
+        strategy.setSwapInfo(swapInfo, 4);
+
+        _testStrategy(oUSDT, USDT, oETH, ETH, 2 * 10 ** 18);
+
+        vm.stopPrank();
+    }
+
+    function test_BNB_BNB() public {
+        vm.startPrank(owner);
 
         // Configuration
         strategy.setStrategyXToken(oBNB);
@@ -350,15 +401,6 @@ contract OlaStrategyBNBTest is Test {
 
     function test_BNB_BUSD() public {
         vm.startPrank(owner);
-
-        uint256 blidExpense;
-        uint256 blidStorage;
-        uint256 blidExpenseNew;
-        uint256 blidStorageNew;
-        uint256 BANANA_balance;
-
-        XTokenInfo memory tokenInfo;
-        XTokenInfo memory supplyTokenInfo;
 
         // Configuration
         strategy.setStrategyXToken(oBUSD);
@@ -414,6 +456,128 @@ contract OlaStrategyBNBTest is Test {
         strategy.setSwapInfo(swapInfo, 4);
 
         _testStrategy(oBNB, ZERO_ADDRESS, oBUSD, BUSD, 10 ** 18);
+
+        vm.stopPrank();
+    }
+
+    function test_BNB_CAKE() public {
+        vm.startPrank(owner);
+
+        // Configuration
+        strategy.setStrategyXToken(oCAKE);
+        strategy.setSupplyXToken(oBNB);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = apeSwapRouter;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](4);
+        swapInfo.paths[0][0] = BANANA;
+        swapInfo.paths[0][1] = BUSD;
+        swapInfo.paths[0][2] = USDT;
+        swapInfo.paths[0][3] = blid;
+        strategy.setSwapInfo(swapInfo, 0);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = apeSwapRouter;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](3);
+        swapInfo.paths[0][0] = BANANA;
+        swapInfo.paths[0][1] = ZERO_ADDRESS;
+        swapInfo.paths[0][2] = CAKE;
+        strategy.setSwapInfo(swapInfo, 1);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = pancakeSwapRouter;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](5);
+        swapInfo.paths[0][0] = CAKE;
+        swapInfo.paths[0][1] = ZERO_ADDRESS;
+        swapInfo.paths[0][2] = BUSD;
+        swapInfo.paths[0][3] = USDT;
+        swapInfo.paths[0][4] = blid;
+        strategy.setSwapInfo(swapInfo, 2);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = pancakeSwapRouter;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](2);
+        swapInfo.paths[0][0] = CAKE;
+        swapInfo.paths[0][1] = ZERO_ADDRESS;
+        strategy.setSwapInfo(swapInfo, 3);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = pancakeSwapRouter;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](4);
+        swapInfo.paths[0][0] = ZERO_ADDRESS;
+        swapInfo.paths[0][1] = BUSD;
+        swapInfo.paths[0][2] = USDT;
+        swapInfo.paths[0][3] = blid;
+        strategy.setSwapInfo(swapInfo, 4);
+
+        _testStrategy(oBNB, ZERO_ADDRESS, oCAKE, CAKE, 10 ** 18);
+
+        vm.stopPrank();
+    }
+
+    function test_BNB_ETH() public {
+        vm.startPrank(owner);
+
+        // Configuration
+        strategy.setStrategyXToken(oETH);
+        strategy.setSupplyXToken(oBNB);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = apeSwapRouter;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](4);
+        swapInfo.paths[0][0] = BANANA;
+        swapInfo.paths[0][1] = BUSD;
+        swapInfo.paths[0][2] = USDT;
+        swapInfo.paths[0][3] = blid;
+        strategy.setSwapInfo(swapInfo, 0);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = apeSwapRouter;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](3);
+        swapInfo.paths[0][0] = BANANA;
+        swapInfo.paths[0][1] = ZERO_ADDRESS;
+        swapInfo.paths[0][2] = ETH;
+        strategy.setSwapInfo(swapInfo, 1);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = apeSwapRouter;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](5);
+        swapInfo.paths[0][0] = ETH;
+        swapInfo.paths[0][1] = ZERO_ADDRESS;
+        swapInfo.paths[0][2] = BUSD;
+        swapInfo.paths[0][3] = USDT;
+        swapInfo.paths[0][4] = blid;
+        strategy.setSwapInfo(swapInfo, 2);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = pancakeSwapRouter;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](2);
+        swapInfo.paths[0][0] = ETH;
+        swapInfo.paths[0][1] = ZERO_ADDRESS;
+        strategy.setSwapInfo(swapInfo, 3);
+
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters = new address[](1);
+        swapInfo.swapRouters[0] = pancakeSwapRouter;
+        swapInfo.paths = new address[][](1);
+        swapInfo.paths[0] = new address[](4);
+        swapInfo.paths[0][0] = ZERO_ADDRESS;
+        swapInfo.paths[0][1] = BUSD;
+        swapInfo.paths[0][2] = USDT;
+        swapInfo.paths[0][3] = blid;
+        strategy.setSwapInfo(swapInfo, 4);
+
+        _testStrategy(oBNB, ZERO_ADDRESS, oETH, ETH, 10 ** 18);
 
         vm.stopPrank();
     }
@@ -488,7 +652,7 @@ contract OlaStrategyBNBTest is Test {
             console.log("BLID of storage   : ", blidStorage);
 
             console.log("-- After Claim with small DF amount --");
-            strategy.setMinRewardsSwapLimit(10 ** 20);
+            strategy.setMinRewardsSwapLimit(10 ** 25);
             strategy.claimRewards();
 
             blidExpenseNew = IERC20MetadataUpgradeable(blid).balanceOf(expense);
@@ -561,7 +725,11 @@ contract OlaStrategyBNBTest is Test {
                         int256(supplyTokenInfo.totalSupplyUSD) -
                         int256(tokenInfo.totalSupplyUSD) +
                         int256(tokenInfo.borrowAmountUSD) <=
-                        int256(10 ** (18 - IERC20MetadataUpgradeable(strategyToken).decimals())),
+                        (
+                            IERC20MetadataUpgradeable(strategyToken).decimals() == 18
+                                ? int256(1000)
+                                : int256(2 * 10 ** (18 - IERC20MetadataUpgradeable(strategyToken).decimals()))
+                        ),
                     true
                 );
             }
@@ -648,26 +816,25 @@ contract OlaStrategyBNBTest is Test {
         }
 
         // Deposit / Withdraw All
-        if (false) {
-            if (strategyToken != ZERO_ADDRESS) {
-                console.log("============= Deposit/Withdraw All =============");
-                if (supplyToken == ZERO_ADDRESS) {
-                    IStorageTest(_storage).deposit{ value: depositAmount }(depositAmount, supplyToken);
-                } else {
-                    IStorageTest(_storage).deposit(depositAmount, supplyToken);
-                }
-
-                strategy.setMinStorageAvailable(depositAmount / 10);
-                strategy.useToken();
-                strategy.rebalance();
-
-                vm.roll(block.number + 1000000);
-                vm.warp(block.timestamp + 100);
-                IStorageTest(_storage).withdraw(depositAmount, supplyToken);
-
-                tokenInfo = _showXTokenInfo();
-                assertEq(tokenInfo.lendingAmount, 0);
+        if (strategyToken != ZERO_ADDRESS) {
+            console.log("============= Deposit/Withdraw All =============");
+            if (supplyToken == ZERO_ADDRESS) {
+                IStorageTest(_storage).deposit{ value: depositAmount }(depositAmount, supplyToken);
+            } else {
+                IStorageTest(_storage).deposit(depositAmount, supplyToken);
             }
+
+            strategy.setMinStorageAvailable(depositAmount / 10);
+
+            strategy.useToken();
+            strategy.rebalance();
+
+            vm.roll(block.number + 1000000);
+            vm.warp(block.timestamp + 100);
+            IStorageTest(_storage).withdraw(depositAmount, supplyToken);
+
+            tokenInfo = _showXTokenInfo();
+            assertEq(tokenInfo.lendingAmount, 0);
         }
     }
 

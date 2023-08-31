@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.13;
+pragma solidity ^0.8.13;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
@@ -11,8 +11,8 @@ import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 
-import "./Interfaces/ILogicContract.sol";
-import "./Interfaces/AggregatorV3Interface.sol";
+import "../interfaces/ILogicContract.sol";
+import "../interfaces/AggregatorV3Interface.sol";
 
 contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
     using SafeERC20Upgradeable for IERC20Upgradeable;
@@ -68,7 +68,7 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
     event WithdrawBLID(address depositor, uint256 amount);
     event ClaimBoostBLID(address depositor, uint256 amount);
     event SetBoostingAddress(address boostingAddress);
-    event SetOracleDeviationLimit(uint256 setOracleDeviationLimit);
+    event SetOracleDeviationLimit(uint256 oracleDeviationLimit);
     event SetOracleLatestAnswer(
         address token,
         int256 latestAnswer,
@@ -82,7 +82,7 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
     function initialize() external initializer {
         OwnableUpgradeable.__Ownable_init();
         PausableUpgradeable.__Pausable_init();
-        oracleDeviationLimit = (1 ether) / uint256(86400); // limit is 1% within 1 day
+        oracleDeviationLimit = (1 ether) / uint256(86400); // limit is 100% within 1 day, 50% within 1 day = (1 ether) * 50 / (100 * 86400)
     }
 
     mapping(uint256 => EarnBLID) private earnBLID;
@@ -544,7 +544,7 @@ contract StorageV21 is Initializable, OwnableUpgradeable, PausableUpgradeable {
                 delta = 0;
             } else {
                 delta =
-                    (delta * (1e18)) /
+                    (delta * (1 ether)) /
                     (_oracleLatestAnswerInfo.latestAnswer *
                         (block.timestamp - _oracleLatestAnswerInfo.timestamp)
                             .toInt256());

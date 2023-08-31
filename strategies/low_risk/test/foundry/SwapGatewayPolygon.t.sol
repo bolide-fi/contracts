@@ -25,7 +25,7 @@ contract SwapGatewayPolygonTest is Test {
     address MATIC = 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270;
 
     address private constant ZERO_ADDRESS = address(0);
-    uint256 SWAP_MATIC = 10**17;
+    uint256 SWAP_MATIC = 10 ** 17;
 
     address[] USDT_USDC;
     address[] USDC_USDT;
@@ -37,10 +37,7 @@ contract SwapGatewayPolygonTest is Test {
     address[] DAI_WETH_USDC_USDT_MATIC;
 
     function setUp() public {
-        mainnetFork = vm.createSelectFork(
-            "https://polygon-rpc.com",
-            BLOCK_NUMBER
-        );
+        mainnetFork = vm.createSelectFork(vm.rpcUrl("polygon"), BLOCK_NUMBER);
 
         // SwapGateway Initialization
         swapGateway = new SwapGateway();
@@ -94,7 +91,7 @@ contract SwapGatewayPolygonTest is Test {
         DAI_WETH_USDC_USDT_MATIC[4] = ZERO_ADDRESS;
 
         // Seed balance
-        vm.deal(owner, 10**18);
+        vm.deal(owner, 10 ** 18);
     }
 
     function test_swapV2() public {
@@ -134,25 +131,16 @@ contract SwapGatewayPolygonTest is Test {
         uint256 DAI_A;
         uint256 USDT_O;
 
-        IERC20MetadataUpgradeable(USDT).approve(
-            address(swapGateway),
-            type(uint256).max
-        );
-        IERC20MetadataUpgradeable(USDC).approve(
-            address(swapGateway),
-            type(uint256).max
-        );
-        IERC20MetadataUpgradeable(DAI).approve(
-            address(swapGateway),
-            type(uint256).max
-        );
+        IERC20MetadataUpgradeable(USDT).approve(address(swapGateway), type(uint256).max);
+        IERC20MetadataUpgradeable(USDC).approve(address(swapGateway), type(uint256).max);
+        IERC20MetadataUpgradeable(DAI).approve(address(swapGateway), type(uint256).max);
 
         // ********** Native Token Test ********** //
 
         // MATIC(Exact) -> USDT
         MATIC_B = address(owner).balance;
         USDT_B = IERC20MetadataUpgradeable(USDT).balanceOf(owner);
-        ISwapGateway(swapGateway).swap{value: SWAP_MATIC}(
+        ISwapGateway(swapGateway).swap{ value: SWAP_MATIC }(
             swapRouter,
             SWAP_MATIC,
             0,
@@ -169,7 +157,7 @@ contract SwapGatewayPolygonTest is Test {
         // MATIC -> USDT(Exact)
         MATIC_B = MATIC_A;
         USDT_B = USDT_A;
-        ISwapGateway(swapGateway).swap{value: SWAP_MATIC}(
+        ISwapGateway(swapGateway).swap{ value: SWAP_MATIC }(
             swapRouter,
             SWAP_MATIC,
             10000,
@@ -206,14 +194,7 @@ contract SwapGatewayPolygonTest is Test {
         // USDT(Exact) -> MATIC
         MATIC_B = MATIC_A;
         USDT_B = USDT_A;
-        ISwapGateway(swapGateway).swap(
-            swapRouter,
-            USDT_B,
-            0,
-            USDT_MATIC,
-            true,
-            block.timestamp + 300
-        );
+        ISwapGateway(swapGateway).swap(swapRouter, USDT_B, 0, USDT_MATIC, true, block.timestamp + 300);
         MATIC_A = address(owner).balance;
         USDT_A = IERC20MetadataUpgradeable(USDT).balanceOf(owner);
 
@@ -223,7 +204,7 @@ contract SwapGatewayPolygonTest is Test {
         // MATIC(Exact) -> USDT -> USDC -> WETH -> DAI
         MATIC_B = address(owner).balance;
         DAI_B = IERC20MetadataUpgradeable(DAI).balanceOf(owner);
-        ISwapGateway(swapGateway).swap{value: SWAP_MATIC}(
+        ISwapGateway(swapGateway).swap{ value: SWAP_MATIC }(
             swapRouter,
             SWAP_MATIC,
             0,
@@ -240,7 +221,7 @@ contract SwapGatewayPolygonTest is Test {
         // MATIC -> USDT -> USDC -> WETH -> DAI(Exact)
         MATIC_B = MATIC_A;
         DAI_B = DAI_A;
-        ISwapGateway(swapGateway).swap{value: SWAP_MATIC}(
+        ISwapGateway(swapGateway).swap{ value: SWAP_MATIC }(
             swapRouter,
             SWAP_MATIC,
             10000,
@@ -289,7 +270,7 @@ contract SwapGatewayPolygonTest is Test {
         assertEq(DAI_A, 0);
 
         // ********** Token - Token Test ********** //
-        ISwapGateway(swapGateway).swap{value: SWAP_MATIC * 5}(
+        ISwapGateway(swapGateway).swap{ value: SWAP_MATIC * 5 }(
             swapRouter,
             SWAP_MATIC * 5,
             0,
@@ -302,14 +283,7 @@ contract SwapGatewayPolygonTest is Test {
         // USDT(Exact) -> USDC
         USDT_B = USDT_O;
         USDC_B = IERC20MetadataUpgradeable(USDC).balanceOf(owner);
-        ISwapGateway(swapGateway).swap(
-            swapRouter,
-            USDT_B,
-            0,
-            USDT_USDC,
-            true,
-            block.timestamp + 300
-        );
+        ISwapGateway(swapGateway).swap(swapRouter, USDT_B, 0, USDT_USDC, true, block.timestamp + 300);
         USDT_A = IERC20MetadataUpgradeable(USDT).balanceOf(owner);
         USDC_A = IERC20MetadataUpgradeable(USDC).balanceOf(owner);
 
@@ -368,26 +342,9 @@ contract SwapGatewayPolygonTest is Test {
         assertEq(DAI_A < DAI_B, true);
 
         // Return DAI, USDC to USDT
-        ISwapGateway(swapGateway).swap(
-            swapRouter,
-            DAI_A,
-            0,
-            DAI_WETH_USDC_USDT,
-            true,
-            block.timestamp + 300
-        );
-        ISwapGateway(swapGateway).swap(
-            swapRouter,
-            USDC_A,
-            0,
-            USDC_USDT,
-            true,
-            block.timestamp + 300
-        );
-        assertEq(
-            USDT_O > IERC20MetadataUpgradeable(USDT).balanceOf(owner),
-            true
-        );
+        ISwapGateway(swapGateway).swap(swapRouter, DAI_A, 0, DAI_WETH_USDC_USDT, true, block.timestamp + 300);
+        ISwapGateway(swapGateway).swap(swapRouter, USDC_A, 0, USDC_USDT, true, block.timestamp + 300);
+        assertEq(USDT_O > IERC20MetadataUpgradeable(USDT).balanceOf(owner), true);
         assertEq(IERC20MetadataUpgradeable(USDC).balanceOf(owner), 0);
         assertEq(IERC20MetadataUpgradeable(DAI).balanceOf(owner), 0);
 
@@ -404,11 +361,7 @@ contract SwapGatewayPolygonTest is Test {
         assertEq(amountOut > 990000, true);
         assertEq(amountOut < 1010000, true);
 
-        amountOutReverse = swapGateway.quoteExactInput(
-            swapRouter,
-            1000000,
-            USDT_USDC
-        );
+        amountOutReverse = swapGateway.quoteExactInput(swapRouter, 1000000, USDT_USDC);
         console.log("USDT-USDC", amountOutReverse);
 
         assertEq(amountOutReverse > 990000, true);
@@ -416,57 +369,34 @@ contract SwapGatewayPolygonTest is Test {
 
         assertEq(amountOut * amountOutReverse > 990000000000, true);
 
-        amountOut = swapGateway.quoteExactInput(
-            swapRouter,
-            1000000,
-            USDT_USDC_WETH_DAI
-        );
+        amountOut = swapGateway.quoteExactInput(swapRouter, 1000000, USDT_USDC_WETH_DAI);
         console.log("USDT-DAI", amountOut);
 
         assertEq(amountOut > 990000000000000000, true);
         assertEq(amountOut < 1010000000000000000, true);
 
-        amountOutReverse = swapGateway.quoteExactInput(
-            swapRouter,
-            10**18,
-            DAI_WETH_USDC_USDT
-        );
+        amountOutReverse = swapGateway.quoteExactInput(swapRouter, 10 ** 18, DAI_WETH_USDC_USDT);
         console.log("DAI-USDT", amountOutReverse);
 
         assertEq(amountOutReverse > 980000, true);
         assertEq(amountOutReverse < 1020000, true);
 
-        assertEq((amountOut * amountOutReverse) / 10**12 > 980000000000, true);
+        assertEq((amountOut * amountOutReverse) / 10 ** 12 > 980000000000, true);
 
-        amountOut = swapGateway.quoteExactInput(swapRouter, 10**18, MATIC_USDT);
+        amountOut = swapGateway.quoteExactInput(swapRouter, 10 ** 18, MATIC_USDT);
         console.log("MATIC-USDT", amountOut);
 
-        amountOutReverse = swapGateway.quoteExactInput(
-            swapRouter,
-            10**6,
-            USDT_MATIC
-        );
+        amountOutReverse = swapGateway.quoteExactInput(swapRouter, 10 ** 6, USDT_MATIC);
         console.log("USDT-MATIC", amountOutReverse);
 
-        assertEq((amountOut * amountOutReverse) / 10**12 > 990000000000, true);
+        assertEq((amountOut * amountOutReverse) / 10 ** 12 > 990000000000, true);
 
-        amountOut = swapGateway.quoteExactInput(
-            swapRouter,
-            10**18,
-            MATIC_USDT_USDC_WETH_DAI
-        );
+        amountOut = swapGateway.quoteExactInput(swapRouter, 10 ** 18, MATIC_USDT_USDC_WETH_DAI);
         console.log("MATIC-DAI", amountOut);
 
-        amountOutReverse = swapGateway.quoteExactInput(
-            swapRouter,
-            10**18,
-            DAI_WETH_USDC_USDT_MATIC
-        );
+        amountOutReverse = swapGateway.quoteExactInput(swapRouter, 10 ** 18, DAI_WETH_USDC_USDT_MATIC);
         console.log("DAI-MATIC", amountOutReverse);
 
-        assertEq(
-            (amountOut * amountOutReverse) / 10**18 > 970000000000000000,
-            true
-        );
+        assertEq((amountOut * amountOutReverse) / 10 ** 18 > 970000000000000000, true);
     }
 }
