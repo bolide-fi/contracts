@@ -78,14 +78,23 @@ contract MultiLogic is UpgradeableBase {
      * @param _token token address
      * @param _percentages percentage array
      */
-    function setPercentages(address _token, uint256[] calldata _percentages)
-        external
+    function setPercentages(address _token, uint256[] memory _percentages)
+        public
         onlyOwner
     {
         uint256 _count = multiStrategyLength;
-        uint256 sumAvailable = 0;
+        uint256 sumTotal = 0;
         uint256 index;
+        uint256[] memory releaseAmounts = new uint256[](_count);
+        uint256 sumReleaseAmount = 0;
+
         require(_percentages.length == _count, "M2");
+
+        mapping(address => uint256)
+            storage _tokenAvailable = tokenAvailableLogic[_token];
+        mapping(address => uint256) storage _tokenBalance = tokenBalanceLogic[
+            _token
+        ];
 
         // Check sum of percentage
         {
@@ -99,51 +108,109 @@ contract MultiLogic is UpgradeableBase {
             require(sumPercentage == 10000, "M3");
         }
 
-        // Get sum of available
+        // Get sum of total
         for (index = 0; index < _count; ) {
-            singleStrategy memory _multiStrategy = multiStrategyData[
+            singleStrategy memory sStrategy = multiStrategyData[
                 multiStrategyName[index]
             ];
-            require(
-                tokenBalanceLogic[_token][_multiStrategy.logicContract] == 0,
-                "M11"
-            );
 
             // Calculate sum
-            sumAvailable += tokenAvailableLogic[_token][
-                _multiStrategy.logicContract
-            ];
+            sumTotal +=
+                _tokenAvailable[sStrategy.logicContract] +
+                _tokenBalance[sStrategy.logicContract];
 
             // Set percentage
-            dividePercentage[_token][
-                _multiStrategy.logicContract
-            ] = _percentages[index];
+            dividePercentage[_token][sStrategy.logicContract] = _percentages[
+                index
+            ];
 
             unchecked {
                 ++index;
             }
         }
 
-        // Set available for each strategy
-        if (sumAvailable > 0) {
+        // Set avaliable, balance for each strategy
+        if (sumTotal > 0) {
             uint256 sum = 0;
             for (index = 0; index < _count; ) {
-                uint256 newAvailable;
+                singleStrategy memory sStrategy = multiStrategyData[
+                    multiStrategyName[index]
+                ];
+
+                // calculate total for each strategy
+                uint256 newTotal;
                 if (index == _count - 1) {
-                    newAvailable = sumAvailable - sum;
+                    newTotal = sumTotal - sum;
                 } else {
-                    newAvailable = (sumAvailable * _percentages[index]) / 10000;
-                    sum += newAvailable;
+                    newTotal = (sumTotal * _percentages[index]) / 10000;
+                    sum += newTotal;
                 }
 
-                tokenAvailableLogic[_token][
-                    multiStrategyData[multiStrategyName[index]].logicContract
-                ] = newAvailable;
+                if (newTotal < _tokenBalance[sStrategy.logicContract]) {
+                    // If newTotal < balance, balance = newTotal, available = 0
+                    releaseAmounts[index] =
+                        _tokenBalance[sStrategy.logicContract] -
+                        newTotal;
+                    _tokenBalance[sStrategy.logicContract] = newTotal;
+                    _tokenAvailable[sStrategy.logicContract] = 0;
+
+                    sumReleaseAmount += releaseAmounts[index];
+                } else {
+                    // If newTotal > balance, available = newTotal - balance;
+                    _tokenAvailable[sStrategy.logicContract] =
+                        newTotal -
+                        _tokenBalance[sStrategy.logicContract];
+                }
 
                 unchecked {
                     ++index;
                 }
             }
+        }
+
+        // Release token for each strategy and send token to storage
+        if (sumReleaseAmount > 0) {
+            // ReleaseToken for each strategy and take token from Logic to MultiLogic
+            for (index = 0; index < _count; ) {
+                if (releaseAmounts[index] > 0) {
+                    singleStrategy memory sStrategy = multiStrategyData[
+                        multiStrategyName[index]
+                    ];
+
+                    IStrategy(sStrategy.strategyContract).releaseToken(
+                        releaseAmounts[index],
+                        _token
+                    );
+
+                    if (_token != ZERO_ADDRESS) {
+                        IERC20Upgradeable(_token).safeTransferFrom(
+                            sStrategy.logicContract,
+                            address(this),
+                            releaseAmounts[index]
+                        );
+                    }
+                }
+
+                unchecked {
+                    ++index;
+                }
+            }
+
+            // Send tokens to storage
+            if (_token != ZERO_ADDRESS) {
+                if (!approvedTokens[_token]) {
+                    //if token not approved for storage
+                    IERC20Upgradeable(_token).approve(
+                        storageContract,
+                        type(uint256).max
+                    );
+                    approvedTokens[_token] = true;
+                }
+            } else {
+                _send(payable(storageContract), sumReleaseAmount);
+            }
+
+            IStorage(storageContract).returnToken(sumReleaseAmount, _token);
         }
     }
 
@@ -156,6 +223,11 @@ contract MultiLogic is UpgradeableBase {
         string[] calldata _strategyName,
         singleStrategy[] calldata _multiStrategy
     ) external onlyOwner {
+        uint256 count = _multiStrategy.length;
+        uint256 nameCount = _strategyName.length;
+        require(count == nameCount, "M2");
+        require(count != 0, "M11");
+
         // Remove exist strategies
         for (uint256 i = 0; i < multiStrategyLength; ) {
             isExistLogic[
@@ -167,13 +239,12 @@ contract MultiLogic is UpgradeableBase {
             }
         }
         delete multiStrategyName;
-
         // Add new strategies
-        uint256 count = _multiStrategy.length;
-        uint256 nameCount = _strategyName.length;
-        require(count == nameCount);
 
         for (uint256 i = 0; i < count; ) {
+            require(_multiStrategy[i].logicContract != ZERO_ADDRESS, "M11");
+            require(_multiStrategy[i].strategyContract != ZERO_ADDRESS, "M11");
+
             multiStrategyName.push(_strategyName[i]);
             multiStrategyData[_strategyName[i]] = _multiStrategy[i];
             isExistLogic[_multiStrategy[i].logicContract] = true;
@@ -197,6 +268,9 @@ contract MultiLogic is UpgradeableBase {
         singleStrategy memory _multiStrategy,
         bool _overwrite
     ) external onlyOwner {
+        require(_multiStrategy.logicContract != ZERO_ADDRESS, "M11");
+        require(_multiStrategy.strategyContract != ZERO_ADDRESS, "M11");
+
         bool exist = false;
         for (uint256 i = 0; i < multiStrategyLength; ) {
             if (
@@ -227,6 +301,125 @@ contract MultiLogic is UpgradeableBase {
         emit AddStrategy(_strategyName, _multiStrategy);
     }
 
+    /**
+     * @notice Set percentage of strategy to be 0
+     * destroyAll for that strategy
+     * rebalance existing strategies
+     * @param _strategyName strategy name
+     */
+    function deactivateStrategy(string memory _strategyName)
+        external
+        onlyOwner
+    {
+        uint256 _multiStrategyLength = multiStrategyLength;
+
+        // Check if exists and get index of strategy
+        bool exist = false;
+        uint256 indexOfStrategy = 0;
+        for (uint256 i = 0; i < multiStrategyLength; ) {
+            if (
+                keccak256(abi.encodePacked((multiStrategyName[i]))) ==
+                keccak256(abi.encodePacked((_strategyName)))
+            ) {
+                exist = true;
+                indexOfStrategy = i;
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        if (!exist) {
+            return;
+        }
+
+        // Update Percentages of strategies
+        address[] memory usedTokens = IStorage(storageContract).getUsedTokens();
+        for (uint256 i = 0; i < usedTokens.length; ) {
+            address _token = usedTokens[i];
+            uint256[] memory newPercentages = new uint256[](
+                _multiStrategyLength
+            );
+
+            singleStrategy memory sStrategy = multiStrategyData[
+                multiStrategyName[indexOfStrategy]
+            ];
+
+            // Get percentage of strategy
+            uint256 percentageOfStrategy = dividePercentage[_token][
+                sStrategy.logicContract
+            ];
+
+            // if the percentage is 100%, destroyAll and update percentage, available, balance = 0
+            if (percentageOfStrategy == 10000) {
+                uint256 tokenBalance = tokenBalanceLogic[_token][
+                    sStrategy.logicContract
+                ];
+                IStrategy(sStrategy.strategyContract).releaseToken(
+                    tokenBalance,
+                    _token
+                );
+
+                if (_token != ZERO_ADDRESS) {
+                    IERC20Upgradeable(_token).safeTransferFrom(
+                        sStrategy.logicContract,
+                        address(this),
+                        tokenBalance
+                    );
+                }
+
+                IStorage(storageContract).returnToken(tokenBalance, _token);
+                dividePercentage[_token][sStrategy.logicContract] = 0;
+                tokenAvailableLogic[_token][sStrategy.logicContract] = 0;
+                tokenBalanceLogic[_token][sStrategy.logicContract] = 0;
+            } else {
+                // If it is already deactivated, skip this token
+                if (percentageOfStrategy > 0) {
+                    // Calculate new percentages of strategy
+                    uint256 sumPercentages = 0;
+                    for (uint256 j = 0; j < _multiStrategyLength; ) {
+                        if (j == indexOfStrategy) {
+                            newPercentages[j] = 0;
+                        } else {
+                            newPercentages[j] =
+                                (dividePercentage[_token][
+                                    multiStrategyData[multiStrategyName[j]]
+                                        .logicContract
+                                ] * 10000) /
+                                (10000 - percentageOfStrategy);
+
+                            sumPercentages += newPercentages[j];
+                        }
+                        unchecked {
+                            ++j;
+                        }
+                    }
+
+                    // Fix odd
+                    if (sumPercentages < 10000) {
+                        if (indexOfStrategy == _multiStrategyLength - 1) {
+                            newPercentages[_multiStrategyLength - 2] +=
+                                10000 -
+                                sumPercentages;
+                        } else {
+                            newPercentages[_multiStrategyLength - 1] +=
+                                10000 -
+                                sumPercentages;
+                        }
+                    }
+
+                    // Update percentages
+                    setPercentages(_token, newPercentages);
+                }
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
     /*** Storage function ***/
 
     /**
@@ -245,19 +438,20 @@ contract MultiLogic is UpgradeableBase {
         uint256 _count = multiStrategyLength;
         uint256 _amountDelta = 0;
         uint256 sum = 0;
+
         for (uint256 i = 0; i < _count; i++) {
             address logicAddress = multiStrategyData[multiStrategyName[i]]
                 .logicContract;
-            uint256 newAvailableAmount;
+
+            uint256 newAvailableAmount = ((_amount *
+                dividePercentage[_token][logicAddress]) / 10000);
 
             if (i == _count - 1) {
+                // if the final strategy, newAvailableAmount = shifted delta from previous strategy
                 newAvailableAmount = _amount - sum;
             } else {
-                newAvailableAmount =
-                    ((_amount * dividePercentage[_token][logicAddress]) /
-                        10000) +
-                    _amountDelta;
-
+                // newAvailableAmount += shifted delta from previous strategy
+                newAvailableAmount += _amountDelta;
                 sum += newAvailableAmount;
             }
 
@@ -279,7 +473,7 @@ contract MultiLogic is UpgradeableBase {
                         newAvailableAmount -
                         tokenAvailableLogic[_token][logicAddress];
                     tokenAvailableLogic[_token][logicAddress] = 0;
-                    sum -= _amountDelta;
+                    if (i < _count - 1) sum -= _amountDelta;
                 }
             } else {
                 // set
@@ -288,31 +482,34 @@ contract MultiLogic is UpgradeableBase {
         }
 
         // if we have delta, then decrease available for previous strategy
-        if (_deposit_withdraw == 0 && _amountDelta > 0) {}
-        for (uint256 i = 0; i < _count; ) {
-            singleStrategy memory sStrategy = multiStrategyData[
-                multiStrategyName[i]
-            ];
+        if (_deposit_withdraw == 0 && _amountDelta > 0) {
+            for (uint256 i = 0; i < _count; ) {
+                singleStrategy memory sStrategy = multiStrategyData[
+                    multiStrategyName[i]
+                ];
 
-            uint256 available = tokenAvailableLogic[_token][
-                sStrategy.logicContract
-            ];
-            if (available > 0) {
-                if (available >= _amountDelta) {
-                    tokenAvailableLogic[_token][
-                        sStrategy.logicContract
-                    ] -= _amountDelta;
-                    _amountDelta = 0;
+                uint256 available = tokenAvailableLogic[_token][
+                    sStrategy.logicContract
+                ];
+                if (available > 0) {
+                    if (available >= _amountDelta) {
+                        tokenAvailableLogic[_token][
+                            sStrategy.logicContract
+                        ] -= _amountDelta;
+                        _amountDelta = 0;
 
-                    break;
-                } else {
-                    tokenAvailableLogic[_token][sStrategy.logicContract] = 0;
-                    _amountDelta -= available;
+                        break;
+                    } else {
+                        tokenAvailableLogic[_token][
+                            sStrategy.logicContract
+                        ] = 0;
+                        _amountDelta -= available;
+                    }
                 }
-            }
 
-            unchecked {
-                ++i;
+                unchecked {
+                    ++i;
+                }
             }
         }
 
@@ -343,7 +540,7 @@ contract MultiLogic is UpgradeableBase {
                 // For the final strategy, we calculate remains
                 releaseAmount = _amount - _amountReleaseSum;
             } else {
-                // releaseAmount = percentage + sweeped delta from previous strategy
+                // releaseAmount = percentage + shifted delta from previous strategy
                 releaseAmount =
                     (_amount *
                         dividePercentage[_token][sStrategy.logicContract]) /
@@ -351,7 +548,7 @@ contract MultiLogic is UpgradeableBase {
                     _amountDelta;
             }
 
-            // If balance < releaseAmount, release balance and sweep delta to next strategy
+            // If balance < releaseAmount, release balance and shift delta to next strategy
             uint256 balance = tokenBalanceLogic[_token][
                 sStrategy.logicContract
             ];

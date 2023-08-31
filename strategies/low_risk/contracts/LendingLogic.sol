@@ -16,10 +16,19 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
     mapping(address => bool) internal usedXTokens;
     mapping(address => address) internal XTokens;
 
+    event AddXToken(address token, address xToken);
+
     function __LendingLogic_init(address _comptroller, address _rainMaker)
         public
         initializer
     {
+        __LendingLogic_init__inherited(_comptroller, _rainMaker);
+    }
+
+    function __LendingLogic_init__inherited(
+        address _comptroller,
+        address _rainMaker
+    ) public onlyInitializing {
         UpgradeableBase.initialize();
 
         comptroller = _comptroller;
@@ -40,8 +49,8 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
      * @param xToken Address of XToken
      */
     function addXTokens(address token, address xToken)
-        external
-        override
+        public
+        virtual
         onlyOwnerAndAdmin
     {
         require(xToken != ZERO_ADDRESS, "E20");
@@ -61,6 +70,11 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
         }
 
         usedXTokens[xToken] = true;
+        emit AddXToken(token, xToken);
+    }
+
+    function getXToken(address token) public view returns (address) {
+        return XTokens[token];
     }
 
     function isXTokenUsed(address xToken) public view returns (bool) {
@@ -93,13 +107,25 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
     }
 
     /**
+     * @notice Check account entered market
+     */
+    function checkEnteredMarket(address xToken)
+        external
+        view
+        override
+        returns (bool)
+    {
+        return _checkEnteredMarket(xToken);
+    }
+
+    /**
      * @notice Every user accrues rewards for each block
      * Venus : XVS, Ola : BANANA, dForce : DF
      * they are supplying to or borrowing from the protocol.
      */
     function claim() external override onlyOwnerAndAdmin {
         // Get all markets
-        address[] memory xTokens = _getAllMarkets();
+        address[] memory xTokens = _getEnteredMarkets();
 
         // Claim
         _claim(xTokens);
@@ -200,6 +226,38 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
         return _redeem(xToken, redeemTokenAmount);
     }
 
+    function rewardToken() external view override returns (address) {
+        return _rewardToken();
+    }
+
+    function getUnderlying(address xToken)
+        external
+        view
+        override
+        returns (address)
+    {
+        return _getUnderlying(xToken);
+    }
+
+    function getUnderlyingPrice(address xToken)
+        public
+        view
+        override
+        isUsedXToken(xToken)
+        returns (uint256)
+    {
+        return _getUnderlyingPrice(xToken);
+    }
+
+    function getCollateralFactor(address xToken)
+        external
+        view
+        override
+        returns (uint256)
+    {
+        return _getCollateralFactor(xToken);
+    }
+
     /*** Private Virtual Function ***/
 
     /**
@@ -222,6 +280,13 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
         returns (uint256[] memory)
     {
         return IComptrollerCompound(comptroller).enterMarkets(xTokens);
+    }
+
+    /**
+     * @notice AccurateInterest
+     */
+    function accrueInterest(address xToken) external virtual override {
+        _accrueInterest(xToken);
     }
 
     /**
@@ -296,9 +361,67 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
     function _claim(address[] memory xTokens) internal virtual {}
 
     /**
-     * @notice Get all entered xTokens to comptroller
+     * @notice Get all xTokens to comptroller
      */
     function _getAllMarkets() internal view virtual returns (address[] memory) {
         return IComptrollerCompound(comptroller).getAllMarkets();
     }
+
+    /**
+     * @notice Get all entered xTokens to comptroller
+     */
+    function _getEnteredMarkets()
+        internal
+        view
+        virtual
+        returns (address[] memory)
+    {
+        return IComptrollerCompound(comptroller).getAssetsIn(address(this));
+    }
+
+    /**
+     * @notice Check account entered market
+     */
+    function _checkEnteredMarket(address xToken)
+        internal
+        view
+        virtual
+        returns (bool)
+    {
+        return
+            IComptrollerCompound(comptroller).checkMembership(
+                address(this),
+                xToken
+            );
+    }
+
+    function _rewardToken() internal view virtual returns (address) {}
+
+    function _getUnderlyingPrice(address xToken)
+        internal
+        view
+        virtual
+        returns (uint256)
+    {}
+
+    function _getUnderlying(address xToken)
+        internal
+        view
+        virtual
+        returns (address)
+    {
+        return IXToken(xToken).underlying();
+    }
+
+    function _getCollateralFactor(address xToken)
+        internal
+        view
+        virtual
+        returns (uint256)
+    {}
+
+    /**
+     * @notice accrueInterest
+     */
+    function _accrueInterest(address xToken) internal virtual {}
 }

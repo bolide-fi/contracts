@@ -18,6 +18,7 @@ import "./interfaces/IStrategyStatistics.sol";
 
 library StrategyStatisticsLib {
     using SafeRatioMath for uint256;
+    using SafeCastUpgradeable for uint256;
 
     uint256 private constant DAYS_PER_YEAR = 365;
     uint256 private constant DECIMALS = 18;
@@ -36,41 +37,38 @@ library StrategyStatisticsLib {
         public
         view
         returns (
-            uint256 strategyAmountUSD,
+            int256 strategyAmountUSD,
             uint256 takenAmountUSD,
             uint256 balanceUSD,
             uint256 availableAmountUSD
         )
     {
-        strategyAmountUSD = 0;
-        takenAmountUSD = 0;
-        balanceUSD = 0;
-        availableAmountUSD = 0;
         address _multiLogicProxy = ILogic(logic).multiLogicProxy();
 
         address[] memory usedTokens = IMultiLogicProxy(_multiLogicProxy)
             .getUsedTokensStorage();
         for (uint256 index = 0; index < usedTokens.length; ) {
+            uint256 priceUSD = _findPriceUSD(usedTokens[index], priceUSDList);
             takenAmountUSD +=
                 (IMultiLogicProxy(_multiLogicProxy).getTokenTaken(
                     usedTokens[index],
                     logic
-                ) * _findPriceUSD(usedTokens[index], priceUSDList)) /
+                ) * priceUSD) /
                 BASE;
 
             availableAmountUSD +=
                 (IMultiLogicProxy(_multiLogicProxy).getTokenAvailable(
                     usedTokens[index],
                     logic
-                ) * _findPriceUSD(usedTokens[index], priceUSDList)) /
+                ) * priceUSD) /
                 BASE;
 
             balanceUSD +=
                 ((
                     usedTokens[index] == address(0)
-                        ? logic.balance
+                        ? address(logic).balance
                         : IERC20Upgradeable(usedTokens[index]).balanceOf(logic)
-                ) * _findPriceUSD(usedTokens[index], priceUSDList)) /
+                ) * priceUSD) /
                 BASE;
 
             unchecked {
@@ -78,7 +76,9 @@ library StrategyStatisticsLib {
             }
         }
 
-        strategyAmountUSD += takenAmountUSD - balanceUSD;
+        strategyAmountUSD =
+            (takenAmountUSD).toInt256() -
+            (balanceUSD).toInt256();
     }
 
     function getApy(address _asset, bool isXToken)
@@ -187,9 +187,11 @@ abstract contract StatisticsBase is UpgradeableBase, IStrategyStatistics {
      * @param _blid address of BLID
      */
     function setBLID(address _blid) external onlyOwnerAndAdmin {
-        blid = _blid;
+        if (_blid != ZERO_ADDRESS) {
+            blid = _blid;
 
-        emit SetBLID(_blid);
+            emit SetBLID(_blid);
+        }
     }
 
     /**
@@ -214,8 +216,10 @@ abstract contract StatisticsBase is UpgradeableBase, IStrategyStatistics {
         address _swapRouterBlid,
         address[] memory _pathToSwapBLIDToStableCoin
     ) external onlyOwnerAndAdmin {
-        swapRouterBlid = _swapRouterBlid;
-        pathToSwapBLIDToStableCoin = _pathToSwapBLIDToStableCoin;
+        if (_swapRouterBlid != ZERO_ADDRESS) {
+            swapRouterBlid = _swapRouterBlid;
+            pathToSwapBLIDToStableCoin = _pathToSwapBLIDToStableCoin;
+        }
     }
 
     /**
@@ -223,7 +227,9 @@ abstract contract StatisticsBase is UpgradeableBase, IStrategyStatistics {
      * @param _swapGateway Address of SwapGateway
      */
     function setSwapGateway(address _swapGateway) external onlyOwnerAndAdmin {
-        swapGateway = _swapGateway;
+        if (_swapGateway != ZERO_ADDRESS) {
+            swapGateway = _swapGateway;
+        }
     }
 
     /*** Public General Statistics function ***/
@@ -242,12 +248,13 @@ abstract contract StatisticsBase is UpgradeableBase, IStrategyStatistics {
             _asset,
             comptroller
         );
-        address underlying = IXToken(_asset).underlying();
+        address underlying = _getUnderlyingAddress(_asset);
         uint256 underlyingDecimals = _isXNative(_asset)
             ? DECIMALS
             : IERC20MetadataUpgradeable(underlying).decimals();
 
-        uint256 totalSupply = IXToken(_asset).totalSupply();
+        uint256 totalSupply = (IXToken(_asset).totalSupply() *
+            IXToken(_asset).exchangeRateStored()) / BASE;
         uint256 totalBorrows = IXToken(_asset).totalBorrows();
 
         uint256 liquidity = (IXToken(_asset).getCash() * underlyingPriceUSD) /
@@ -516,6 +523,7 @@ abstract contract StatisticsBase is UpgradeableBase, IStrategyStatistics {
             (10**(DECIMALS - _underlyingDecimals));
         uint256 totalBorrows = IXToken(_asset).totalBorrows() *
             (10**(DECIMALS - _underlyingDecimals));
+        uint256 exchangeRateMantissa = IXToken(_asset).exchangeRateStored();
         uint256 rewardsPrice = _getRewardsTokenPrice(
             comptroller,
             _getRewardsToken(comptroller)
@@ -539,7 +547,7 @@ abstract contract StatisticsBase is UpgradeableBase, IStrategyStatistics {
             _underlyingPrice,
             rewardsPrice,
             distributionSupplySpeed,
-            totalSupply,
+            (totalSupply * exchangeRateMantissa) / BASE,
             blocksPerYear
         );
     }
@@ -592,9 +600,7 @@ abstract contract StatisticsBase is UpgradeableBase, IStrategyStatistics {
 
             // Save PriceUSD
             priceUSDList[index] = PriceInfo(
-                _isXNative(xTokenList[index])
-                    ? ZERO_ADDRESS
-                    : IXToken(xTokenList[index]).underlying(),
+                _getUnderlyingAddress(xTokenList[index]),
                 tokenInfo.priceUSD
             );
 
@@ -630,9 +636,7 @@ abstract contract StatisticsBase is UpgradeableBase, IStrategyStatistics {
                     : IERC20MetadataUpgradeable(
                         IXToken(tokenInfo.xToken).underlying()
                     ).symbol(),
-                _isXNative(tokenInfo.xToken)
-                    ? ZERO_ADDRESS
-                    : IXToken(tokenInfo.xToken).underlying(),
+                _getUnderlyingAddress(tokenInfo.xToken),
                 tokenInfo.underlyingBalance,
                 (tokenInfo.underlyingBalance * tokenInfo.priceUSD) / BASE
             );
@@ -886,5 +890,13 @@ abstract contract StatisticsBase is UpgradeableBase, IStrategyStatistics {
         } else {
             return IERC20MetadataUpgradeable(_asset).symbol();
         }
+    }
+
+    function _getUnderlyingAddress(address _asset)
+        private
+        view
+        returns (address)
+    {
+        return _isXNative(_asset) ? ZERO_ADDRESS : IXToken(_asset).underlying();
     }
 }

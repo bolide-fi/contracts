@@ -16,14 +16,14 @@ contract Booster is UpgradeableBase {
 
     address public blid;
     address public boostingAddress;
-    uint256 public blidPerDay;
     mapping(address => uint256) public lastBoostingTimestamps;
+    mapping(address => uint256) public blidPerDayPerStrategy;
 
     /*** events ***/
 
     event SetBLID(address _blid);
     event SetBoostingAddress(address boostingAddress);
-    event SetBlidPerDay(uint256 blidPerDay);
+    event SetBlidPerDay(address strategy, uint256 blidPerDay);
 
     function __Booster_init() external initializer {
         UpgradeableBase.initialize();
@@ -36,6 +36,7 @@ contract Booster is UpgradeableBase {
      * @param _blid address of BLID
      */
     function setBLID(address _blid) external onlyOwner {
+        require(_blid != ZERO_ADDRESS, "B0");
         blid = _blid;
 
         emit SetBLID(_blid);
@@ -57,23 +58,29 @@ contract Booster is UpgradeableBase {
 
     /**
      * @notice Set blidPerDay
+     * @param _strategy Address of strategy
      * @param _blidPerDay Amount of blidPerDay (decimal = 18)
      */
-    function setBlidPerDay(uint256 _blidPerDay) external onlyOwnerAndAdmin {
-        blidPerDay = _blidPerDay;
+    function setBlidPerDay(address _strategy, uint256 _blidPerDay)
+        external
+        onlyOwnerAndAdmin
+    {
+        blidPerDayPerStrategy[_strategy] = _blidPerDay;
 
-        emit SetBlidPerDay(_blidPerDay);
+        emit SetBlidPerDay(_strategy, _blidPerDay);
     }
 
     /*** Public function ***/
 
     function addEarn(address strategy) public onlyOwnerAndAdmin {
+        require(strategy != ZERO_ADDRESS, "B0");
+
         address logic = IStrategy(strategy).logic();
 
         // Process boosting
         uint256 lastBoostingTimestamp = lastBoostingTimestamps[logic];
         if (lastBoostingTimestamp > 0) {
-            uint256 boostingAmount = (blidPerDay *
+            uint256 boostingAmount = (blidPerDayPerStrategy[strategy] *
                 uint256(block.timestamp - lastBoostingTimestamp)) / 86400;
 
             // Interaction

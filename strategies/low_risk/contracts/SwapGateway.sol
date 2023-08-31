@@ -1275,7 +1275,7 @@ contract SwapGateway is ISwapGateway, UpgradeableBase {
      */
     function _send(address payable _to, uint256 amount) private {
         (bool sent, ) = _to.call{value: amount}("");
-        require(sent, "SR1");
+        require(sent, "SG1");
     }
 
     function _approveTokenForSwapRouter(
