@@ -3,11 +3,11 @@
 pragma solidity ^0.8.13;
 
 interface IComptrollerDForce {
-    function enterMarkets(address[] calldata iTokens) external returns (bool[] memory);
+    function enterMarkets(address[] calldata iTokens)
+        external
+        returns (bool[] memory);
 
-    function markets(
-        address iTokenAddress
-    )
+    function markets(address iTokenAddress)
         external
         view
         returns (
@@ -22,11 +22,20 @@ interface IComptrollerDForce {
 
     function getAlliTokens() external view returns (address[] memory);
 
-    function getEnteredMarkets(address _account) external view returns (address[] memory _accountCollaterals);
+    function getEnteredMarkets(address _account)
+        external
+        view
+        returns (address[] memory _accountCollaterals);
 
-    function calcAccountEquity(
-        address
-    ) external view returns (uint256 equity, uint256 shortfall, uint256 collaterals, uint256 borrows);
+    function calcAccountEquity(address)
+        external
+        view
+        returns (
+            uint256 equity,
+            uint256 shortfall,
+            uint256 collaterals,
+            uint256 borrows
+        );
 
     function priceOracle() external view returns (address);
 
@@ -34,11 +43,15 @@ interface IComptrollerDForce {
 
     function rewardDistributor() external view returns (address);
 
-    function hasEnteredMarket(address account, address iToken) external view returns (bool);
+    function hasEnteredMarket(address account, address iToken)
+        external
+        view
+        returns (bool);
 }
 
 interface IDistributionDForce {
-    function claimReward(address[] memory _holders, address[] memory _iTokens) external;
+    function claimReward(address[] memory _holders, address[] memory _iTokens)
+        external;
 
     function claimRewards(
         address[] memory _holders,
@@ -50,15 +63,30 @@ interface IDistributionDForce {
 
     function reward(address _account) external view returns (uint256);
 
-    function distributionBorrowState(address _asset) external view returns (uint256 index, uint256 block);
+    function distributionBorrowState(address _asset)
+        external
+        view
+        returns (uint256 index, uint256 block);
 
-    function distributionBorrowerIndex(address _asset, address _account) external view returns (uint256);
+    function distributionBorrowerIndex(address _asset, address _account)
+        external
+        view
+        returns (uint256);
 
-    function distributionSupplyState(address _asset) external view returns (uint256 index, uint256 block);
+    function distributionSupplyState(address _asset)
+        external
+        view
+        returns (uint256 index, uint256 block);
 
-    function distributionSupplierIndex(address _asset, address _account) external view returns (uint256);
+    function distributionSupplierIndex(address _asset, address _account)
+        external
+        view
+        returns (uint256);
 
-    function distributionSupplySpeed(address _asset) external view returns (uint256);
+    function distributionSupplySpeed(address _asset)
+        external
+        view
+        returns (uint256);
 
     function distributionSpeed(address _asset) external view returns (uint256);
 }
@@ -90,7 +118,9 @@ interface IiToken {
 interface IDForcePriceOracle {
     function priceModel(address _asset) external view returns (address);
 
-    function getUnderlyingPrice(address _asset) external returns (uint256 _price);
+    function getUnderlyingPrice(address _asset)
+        external
+        returns (uint256 _price);
 }
 
 interface IDForcePriceModel {

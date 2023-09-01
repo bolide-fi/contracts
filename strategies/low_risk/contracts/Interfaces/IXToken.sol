@@ -15,11 +15,22 @@ interface IXToken {
 
     function borrowBalanceCurrent(address account) external returns (uint256);
 
-    function getAccountSnapshot(address account) external view returns (uint256, uint256, uint256, uint256);
+    function getAccountSnapshot(address account)
+        external
+        view
+        returns (
+            uint256,
+            uint256,
+            uint256,
+            uint256
+        );
 
     function underlying() external view returns (address);
 
-    function borrowBalanceStored(address account) external view returns (uint256);
+    function borrowBalanceStored(address account)
+        external
+        view
+        returns (uint256);
 
     function exchangeRateStored() external view returns (uint256);
 

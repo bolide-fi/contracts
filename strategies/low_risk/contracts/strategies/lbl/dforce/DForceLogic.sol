@@ -9,12 +9,23 @@ import "../../../interfaces/IDForce.sol";
 contract DForceLogic is LendingLogic {
     /*** Override internal function ***/
 
-    function _checkMarkets(address xToken) internal view override returns (bool isUsedXToken) {
+    function _checkMarkets(address xToken)
+        internal
+        view
+        override
+        returns (bool isUsedXToken)
+    {
         isUsedXToken = IComptrollerDForce(comptroller).hasiToken(xToken);
     }
 
-    function _enterMarkets(address[] calldata xTokens) internal override returns (uint256[] memory) {
-        bool[] memory results = IComptrollerDForce(comptroller).enterMarkets(xTokens);
+    function _enterMarkets(address[] calldata xTokens)
+        internal
+        override
+        returns (uint256[] memory)
+    {
+        bool[] memory results = IComptrollerDForce(comptroller).enterMarkets(
+            xTokens
+        );
 
         uint256[] memory resultsUint = new uint256[](results.length);
 
@@ -28,9 +39,13 @@ contract DForceLogic is LendingLogic {
         return resultsUint;
     }
 
-    function _mint(address xToken, uint256 mintAmount) internal override returns (uint256) {
+    function _mint(address xToken, uint256 mintAmount)
+        internal
+        override
+        returns (uint256)
+    {
         if (xToken == xETH) {
-            IiTokenETH(xToken).mint{ value: mintAmount }(address(this));
+            IiTokenETH(xToken).mint{value: mintAmount}(address(this));
             return 0;
         }
 
@@ -38,11 +53,15 @@ contract DForceLogic is LendingLogic {
         return 0;
     }
 
-    function _borrow(address xToken, uint256 borrowAmount) internal override returns (uint256) {
+    function _borrow(address xToken, uint256 borrowAmount)
+        internal
+        override
+        returns (uint256)
+    {
         // Get my account's total liquidity value in Compound
-        (uint256 liquidity, uint256 shortfall, , ) = IComptrollerDForce(comptroller).calcAccountEquity(
-            address(this)
-        );
+        (uint256 liquidity, uint256 shortfall, , ) = IComptrollerDForce(
+            comptroller
+        ).calcAccountEquity(address(this));
 
         require(liquidity > 0, "E12");
         require(shortfall == 0, "E11");
@@ -51,9 +70,13 @@ contract DForceLogic is LendingLogic {
         return 0;
     }
 
-    function _repayBorrow(address xToken, uint256 repayAmount) internal override returns (uint256) {
+    function _repayBorrow(address xToken, uint256 repayAmount)
+        internal
+        override
+        returns (uint256)
+    {
         if (xToken == xETH) {
-            IiTokenETH(xToken).repayBorrow{ value: repayAmount }();
+            IiTokenETH(xToken).repayBorrow{value: repayAmount}();
             return 0;
         }
 
@@ -61,12 +84,20 @@ contract DForceLogic is LendingLogic {
         return 0;
     }
 
-    function _redeemUnderlying(address xToken, uint256 redeemAmount) internal override returns (uint256) {
+    function _redeemUnderlying(address xToken, uint256 redeemAmount)
+        internal
+        override
+        returns (uint256)
+    {
         IiToken(xToken).redeemUnderlying(address(this), redeemAmount);
         return 0;
     }
 
-    function _redeem(address xToken, uint256 redeemTokenAmount) internal override returns (uint256) {
+    function _redeem(address xToken, uint256 redeemTokenAmount)
+        internal
+        override
+        returns (uint256)
+    {
         IiToken(xToken).redeem(address(this), redeemTokenAmount);
         return 0;
     }
@@ -78,33 +109,68 @@ contract DForceLogic is LendingLogic {
         IDistributionDForce(rainMaker).claimReward(holders, xTokens);
     }
 
-    function _getAllMarkets() internal view override returns (address[] memory) {
+    function _getAllMarkets()
+        internal
+        view
+        override
+        returns (address[] memory)
+    {
         return IComptrollerDForce(comptroller).getAlliTokens();
     }
 
-    function _getEnteredMarkets() internal view override returns (address[] memory) {
+    function _getEnteredMarkets()
+        internal
+        view
+        override
+        returns (address[] memory)
+    {
         return IComptrollerDForce(comptroller).getEnteredMarkets(address(this));
     }
 
-    function _checkEnteredMarket(address xToken) internal view override returns (bool) {
-        return IComptrollerDForce(comptroller).hasEnteredMarket(address(this), xToken);
-    }
-
-    function _rewardToken() internal view override returns (address) {
-        return IDistributionDForce(IComptrollerDForce(comptroller).rewardDistributor()).rewardToken();
-    }
-
-    function _getUnderlyingPrice(address xToken) internal view override returns (uint256) {
-        address priceOracle = IComptrollerDForce(comptroller).priceOracle();
+    function _checkEnteredMarket(address xToken)
+        internal
+        view
+        override
+        returns (bool)
+    {
         return
-            uint256(
-                IDForcePriceModel(IDForcePriceOracle(priceOracle).priceModel(xToken)).getAssetPrice(xToken)
+            IComptrollerDForce(comptroller).hasEnteredMarket(
+                address(this),
+                xToken
             );
     }
 
-    function _getCollateralFactor(address xToken) internal view override returns (uint256 collateralFactor) {
+    function _rewardToken() internal view override returns (address) {
+        return
+            IDistributionDForce(
+                IComptrollerDForce(comptroller).rewardDistributor()
+            ).rewardToken();
+    }
+
+    function _getUnderlyingPrice(address xToken)
+        internal
+        view
+        override
+        returns (uint256)
+    {
+        address priceOracle = IComptrollerDForce(comptroller).priceOracle();
+        return
+            uint256(
+                IDForcePriceModel(
+                    IDForcePriceOracle(priceOracle).priceModel(xToken)
+                ).getAssetPrice(xToken)
+            );
+    }
+
+    function _getCollateralFactor(address xToken)
+        internal
+        view
+        override
+        returns (uint256 collateralFactor)
+    {
         // get collateralFactor from market
-        (collateralFactor, , , , , , ) = IComptrollerDForce(comptroller).markets(xToken);
+        (collateralFactor, , , , , , ) = IComptrollerDForce(comptroller)
+            .markets(xToken);
     }
 
     function _accrueInterest(address xToken) internal override {

@@ -24,7 +24,8 @@ interface IMultiLogic {
         singleStrategy[] calldata _multiStrategy
     ) external;
 
-    function setPercentages(address _token, uint256[] calldata _percentages) external;
+    function setPercentages(address _token, uint256[] calldata _percentages)
+        external;
 }
 
 interface IStorageTest {
@@ -170,7 +171,9 @@ contract DForceStrategyPolygonTest is Test {
         strategy.setRebalanceParameter(_borrowRateMin, _borrowRateMax);
         strategy.setMinBLIDPerRewardsToken(0);
         strategyLogic.setAdmin(address(strategy));
-        strategy.setRewardsTokenPriceDeviationLimit((1 ether) / uint256(100 * 86400)); // 1% / 1day
+        strategy.setRewardsTokenPriceDeviationLimit(
+            (1 ether) / uint256(100 * 86400)
+        ); // 1% / 1day
 
         // MultiLogicProxy Init
 
@@ -179,7 +182,8 @@ contract DForceStrategyPolygonTest is Test {
         strategyInfo.strategyContract = address(strategy);
         string[] memory _strategyName = new string[](1);
         _strategyName[0] = "DF";
-        MultiLogic.singleStrategy[] memory _multiStrategy = new MultiLogic.singleStrategy[](1);
+        MultiLogic.singleStrategy[]
+            memory _multiStrategy = new MultiLogic.singleStrategy[](1);
         _multiStrategy[0] = strategyInfo;
 
         multiLogic.initStrategies(_strategyName, _multiStrategy);
@@ -190,21 +194,33 @@ contract DForceStrategyPolygonTest is Test {
 
         // Storage init
         IStorageTest(_storage).setMultiLogicProxy(address(multiLogic));
-        IStorageTest(_storage).addToken(ZERO_ADDRESS, 0xAB594600376Ec9fD91F8e885dADF0CE036862dE0);
-        IStorageTest(_storage).addToken(USDC, 0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7);
-        IStorageTest(_storage).addToken(DAI, 0x4746DeC9e833A82EC7C2C1356372CcF2cfcD2F3D);
-        IStorageTest(_storage).addToken(wETH, 0xF9680D99D6C9589e2a93a78A04A279e509205945);
+        IStorageTest(_storage).addToken(
+            ZERO_ADDRESS,
+            0xAB594600376Ec9fD91F8e885dADF0CE036862dE0
+        );
+        IStorageTest(_storage).addToken(
+            USDC,
+            0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7
+        );
+        IStorageTest(_storage).addToken(
+            DAI,
+            0x4746DeC9e833A82EC7C2C1356372CcF2cfcD2F3D
+        );
+        IStorageTest(_storage).addToken(
+            wETH,
+            0xF9680D99D6C9589e2a93a78A04A279e509205945
+        );
 
         // Deal and swap USDC, ETH, DAI, USDT
-        vm.deal(owner, 10 ** 21);
+        vm.deal(owner, 10**21);
 
         path = new address[](2);
         path[0] = ZERO_ADDRESS;
         path[1] = USDT;
 
-        swapGateway.swap{ value: 250 * 10 ** 18 }(
+        swapGateway.swap{value: 250 * 10**18}(
             uniswapV3Router,
-            250 * 10 ** 18,
+            250 * 10**18,
             0,
             path,
             true,
@@ -215,9 +231,9 @@ contract DForceStrategyPolygonTest is Test {
         path[0] = ZERO_ADDRESS;
         path[1] = USDC;
 
-        swapGateway.swap{ value: 250 * 10 ** 18 }(
+        swapGateway.swap{value: 250 * 10**18}(
             uniswapV3Router,
-            250 * 10 ** 18,
+            250 * 10**18,
             0,
             path,
             true,
@@ -229,9 +245,9 @@ contract DForceStrategyPolygonTest is Test {
         path[1] = USDC;
         path[2] = wETH;
 
-        swapGateway.swap{ value: 250 * 10 ** 18 }(
+        swapGateway.swap{value: 250 * 10**18}(
             uniswapV3Router,
-            250 * 10 ** 18,
+            250 * 10**18,
             0,
             path,
             true,
@@ -243,9 +259,9 @@ contract DForceStrategyPolygonTest is Test {
         path[1] = USDC;
         path[2] = DAI;
 
-        swapGateway.swap{ value: 250 * 10 ** 18 }(
+        swapGateway.swap{value: 250 * 10**18}(
             uniswapV3Router,
-            250 * 10 ** 18,
+            250 * 10**18,
             0,
             path,
             true,
@@ -419,7 +435,7 @@ contract DForceStrategyPolygonTest is Test {
         swapInfo.paths[0][1] = ZERO_ADDRESS;
         strategy.setSwapInfo(swapInfo, 3);
 
-        _testStrategy(iMATIC, ZERO_ADDRESS, iMATIC, ZERO_ADDRESS, 10 ** 18);
+        _testStrategy(iMATIC, ZERO_ADDRESS, iMATIC, ZERO_ADDRESS, 10**18);
 
         vm.stopPrank();
     }
@@ -486,7 +502,7 @@ contract DForceStrategyPolygonTest is Test {
         swapInfo.paths[1][1] = blid;
         strategy.setSwapInfo(swapInfo, 4);
 
-        _testStrategy(iMATIC, ZERO_ADDRESS, iDAI, DAI, 10 ** 18);
+        _testStrategy(iMATIC, ZERO_ADDRESS, iDAI, DAI, 10**18);
 
         vm.stopPrank();
     }
@@ -552,7 +568,7 @@ contract DForceStrategyPolygonTest is Test {
         swapInfo.paths[1][1] = blid;
         strategy.setSwapInfo(swapInfo, 4);
 
-        _testStrategy(iUSDC, USDC, iUSDC, USDC, 200 * 10 ** 6);
+        _testStrategy(iUSDC, USDC, iUSDC, USDC, 200 * 10**6);
 
         vm.stopPrank();
     }
@@ -614,7 +630,7 @@ contract DForceStrategyPolygonTest is Test {
         swapInfo.paths[1][1] = blid;
         strategy.setSwapInfo(swapInfo, 4);
 
-        _testStrategy(iUSDC, USDC, iUSDT, USDT, 200 * 10 ** 6);
+        _testStrategy(iUSDC, USDC, iUSDT, USDT, 200 * 10**6);
 
         vm.stopPrank();
     }
@@ -682,7 +698,7 @@ contract DForceStrategyPolygonTest is Test {
         swapInfo.paths[1][1] = blid;
         strategy.setSwapInfo(swapInfo, 4);
 
-        _testStrategy(iwETH, wETH, iUSDC, USDC, 5 * 10 ** 16);
+        _testStrategy(iwETH, wETH, iUSDC, USDC, 5 * 10**16);
 
         vm.stopPrank();
     }
@@ -746,7 +762,7 @@ contract DForceStrategyPolygonTest is Test {
         swapInfo.paths[1][1] = blid;
         strategy.setSwapInfo(swapInfo, 4);
 
-        _testStrategy(iwETH, wETH, iUSDT, USDT, 5 * 10 ** 16);
+        _testStrategy(iwETH, wETH, iUSDT, USDT, 5 * 10**16);
 
         vm.stopPrank();
     }
@@ -813,7 +829,7 @@ contract DForceStrategyPolygonTest is Test {
         swapInfo.paths[1][1] = blid;
         strategy.setSwapInfo(swapInfo, 4);
 
-        _testStrategy(iMATIC, ZERO_ADDRESS, iUSDC, USDC, 10 ** 18);
+        _testStrategy(iMATIC, ZERO_ADDRESS, iUSDC, USDC, 10**18);
 
         vm.stopPrank();
     }
@@ -875,7 +891,7 @@ contract DForceStrategyPolygonTest is Test {
         swapInfo.paths[1][1] = blid;
         strategy.setSwapInfo(swapInfo, 4);
 
-        _testStrategy(iMATIC, ZERO_ADDRESS, iUSDT, USDT, 10 ** 18);
+        _testStrategy(iMATIC, ZERO_ADDRESS, iUSDT, USDT, 10**18);
 
         vm.stopPrank();
     }
@@ -943,7 +959,7 @@ contract DForceStrategyPolygonTest is Test {
         swapInfo.paths[1][1] = blid;
         strategy.setSwapInfo(swapInfo, 4);
 
-        _testStrategy(iDAI, DAI, iUSDC, USDC, 20 * 10 ** 18);
+        _testStrategy(iDAI, DAI, iUSDC, USDC, 20 * 10**18);
 
         vm.stopPrank();
     }
@@ -1007,7 +1023,7 @@ contract DForceStrategyPolygonTest is Test {
         swapInfo.paths[1][1] = blid;
         strategy.setSwapInfo(swapInfo, 4);
 
-        _testStrategy(iDAI, DAI, iUSDT, USDT, 20 * 10 ** 18);
+        _testStrategy(iDAI, DAI, iUSDT, USDT, 20 * 10**18);
 
         vm.stopPrank();
     }
@@ -1031,15 +1047,24 @@ contract DForceStrategyPolygonTest is Test {
         // Deposit to storage
         if (supplyToken == ZERO_ADDRESS) {
             vm.deal(owner, depositAmount);
-            IStorageTest(_storage).deposit{ value: depositAmount }(depositAmount, supplyToken);
+            IStorageTest(_storage).deposit{value: depositAmount}(
+                depositAmount,
+                supplyToken
+            );
         } else {
-            IERC20MetadataUpgradeable(supplyToken).approve(_storage, depositAmount * 100);
+            IERC20MetadataUpgradeable(supplyToken).approve(
+                _storage,
+                depositAmount * 100
+            );
             IStorageTest(_storage).deposit(depositAmount, supplyToken);
         }
 
         console.log(
             "Available in Storage : ",
-            IMultiLogicProxy(multiLogicProxy).getTokenAvailable(supplyToken, logic)
+            IMultiLogicProxy(multiLogicProxy).getTokenAvailable(
+                supplyToken,
+                logic
+            )
         );
 
         // Test useToken
@@ -1056,7 +1081,10 @@ contract DForceStrategyPolygonTest is Test {
         strategy.useToken();
         console.log(
             "Available in Storage : ",
-            IMultiLogicProxy(multiLogicProxy).getTokenAvailable(supplyToken, logic)
+            IMultiLogicProxy(multiLogicProxy).getTokenAvailable(
+                supplyToken,
+                logic
+            )
         );
         tokenInfo = statistics.getStrategyXTokenInfo(supplyXToken, logic);
         assertEq(tokenInfo.totalSupply > 0, true);
@@ -1082,12 +1110,16 @@ contract DForceStrategyPolygonTest is Test {
             console.log("BLID of storage   : ", blidStorage);
 
             console.log("-- After Claim with small DF amount --");
-            strategy.setMinRewardsSwapLimit(10 ** 25);
+            strategy.setMinRewardsSwapLimit(10**25);
             strategy.claimRewards();
 
             blidExpenseNew = IERC20MetadataUpgradeable(blid).balanceOf(expense);
-            blidStorageNew = IERC20MetadataUpgradeable(blid).balanceOf(_storage);
-            Rewards_balance = IERC20MetadataUpgradeable(rewardsToken).balanceOf(logic);
+            blidStorageNew = IERC20MetadataUpgradeable(blid).balanceOf(
+                _storage
+            );
+            Rewards_balance = IERC20MetadataUpgradeable(rewardsToken).balanceOf(
+                    logic
+                );
 
             console.log("BLID of expense   : ", blidExpenseNew);
             console.log("BLID of storage   : ", blidStorageNew);
@@ -1106,8 +1138,12 @@ contract DForceStrategyPolygonTest is Test {
             strategy.claimRewards();
 
             blidExpenseNew = IERC20MetadataUpgradeable(blid).balanceOf(expense);
-            blidStorageNew = IERC20MetadataUpgradeable(blid).balanceOf(_storage);
-            Rewards_balance = IERC20MetadataUpgradeable(rewardsToken).balanceOf(logic);
+            blidStorageNew = IERC20MetadataUpgradeable(blid).balanceOf(
+                _storage
+            );
+            Rewards_balance = IERC20MetadataUpgradeable(rewardsToken).balanceOf(
+                    logic
+                );
 
             console.log("BLID of expense   : ", blidExpenseNew);
             console.log("BLID of storage   : ", blidStorageNew);
@@ -1119,23 +1155,29 @@ contract DForceStrategyPolygonTest is Test {
 
             console.log("-- Rewards Price Kill Switch Active --");
             strategy.setRewardsTokenPrice(
-                (statistics.getRewardsTokenPrice(comptroller, rewardsToken) * 8638) / 8640
+                (statistics.getRewardsTokenPrice(comptroller, rewardsToken) *
+                    8638) / 8640
             );
             vm.warp(block.timestamp + 2000);
             vm.roll(block.number + 99999);
             strategy.claimRewards();
-            Rewards_balance = IERC20MetadataUpgradeable(rewardsToken).balanceOf(logic);
+            Rewards_balance = IERC20MetadataUpgradeable(rewardsToken).balanceOf(
+                    logic
+                );
             console.log("Rewards of Logic  : ", Rewards_balance);
             assertEq(Rewards_balance > 0, true);
 
             console.log("-- Rewards Price Kill Switch Deactive --");
             strategy.setRewardsTokenPrice(
-                (statistics.getRewardsTokenPrice(comptroller, rewardsToken) * 8639) / 8640
+                (statistics.getRewardsTokenPrice(comptroller, rewardsToken) *
+                    8639) / 8640
             );
             vm.warp(block.timestamp + 2000);
             vm.roll(block.number + 99999);
             strategy.claimRewards();
-            Rewards_balance = IERC20MetadataUpgradeable(rewardsToken).balanceOf(logic);
+            Rewards_balance = IERC20MetadataUpgradeable(rewardsToken).balanceOf(
+                    logic
+                );
             console.log("Rewards of Logic  : ", Rewards_balance);
             assertEq(Rewards_balance, 0);
             tokenInfo = _showXTokenInfo();
@@ -1149,13 +1191,22 @@ contract DForceStrategyPolygonTest is Test {
                     true
                 );
             } else {
-                supplyTokenInfo = statistics.getStrategyXTokenInfo(supplyXToken, logic);
+                supplyTokenInfo = statistics.getStrategyXTokenInfo(
+                    supplyXToken,
+                    logic
+                );
                 assertEq(
                     int256(supplyTokenInfo.lendingAmountUSD) -
                         int256(supplyTokenInfo.totalSupplyUSD) -
                         int256(tokenInfo.totalSupplyUSD) +
                         int256(tokenInfo.borrowAmountUSD) <
-                        int256(2 * 10 ** (18 - IERC20MetadataUpgradeable(strategyToken).decimals())),
+                        int256(
+                            2 *
+                                10 **
+                                    (18 -
+                                        IERC20MetadataUpgradeable(strategyToken)
+                                            .decimals())
+                        ),
                     true
                 );
             }
@@ -1196,11 +1247,16 @@ contract DForceStrategyPolygonTest is Test {
 
         blidExpenseNew = IERC20MetadataUpgradeable(blid).balanceOf(expense);
         blidStorageNew = IERC20MetadataUpgradeable(blid).balanceOf(_storage);
-        Rewards_balance = IERC20MetadataUpgradeable(rewardsToken).balanceOf(logic);
+        Rewards_balance = IERC20MetadataUpgradeable(rewardsToken).balanceOf(
+            logic
+        );
 
         console.log(
             "Available in Storage : ",
-            IMultiLogicProxy(multiLogicProxy).getTokenAvailable(supplyToken, logic)
+            IMultiLogicProxy(multiLogicProxy).getTokenAvailable(
+                supplyToken,
+                logic
+            )
         );
         tokenInfo = _showXTokenInfo();
         assertEq(strategy.checkRebalance(), false);
@@ -1223,7 +1279,10 @@ contract DForceStrategyPolygonTest is Test {
                     0
                 );
             } else {
-                supplyTokenInfo = statistics.getStrategyXTokenInfo(supplyXToken, logic);
+                supplyTokenInfo = statistics.getStrategyXTokenInfo(
+                    supplyXToken,
+                    logic
+                );
                 assertEq(
                     int256(supplyTokenInfo.lendingAmountUSD) -
                         int256(supplyTokenInfo.totalSupplyUSD) -
@@ -1245,7 +1304,10 @@ contract DForceStrategyPolygonTest is Test {
         if (strategyToken != ZERO_ADDRESS) {
             console.log("============= Deposit/Withdraw All =============");
             if (supplyToken == ZERO_ADDRESS) {
-                IStorageTest(_storage).deposit{ value: depositAmount }(depositAmount, supplyToken);
+                IStorageTest(_storage).deposit{value: depositAmount}(
+                    depositAmount,
+                    supplyToken
+                );
             } else {
                 IStorageTest(_storage).deposit(depositAmount, supplyToken);
             }
@@ -1264,12 +1326,19 @@ contract DForceStrategyPolygonTest is Test {
         }
     }
 
-    function _showXTokenInfo() private view returns (XTokenInfo memory xTokenInfo) {
+    function _showXTokenInfo()
+        private
+        view
+        returns (XTokenInfo memory xTokenInfo)
+    {
         address supplyXToken = strategy.supplyXToken();
         address strategyXToken = strategy.strategyXToken();
 
         xTokenInfo = statistics.getStrategyXTokenInfo(strategyXToken, logic);
-        XTokenInfo memory supplyXTokenInfo = statistics.getStrategyXTokenInfo(supplyXToken, logic);
+        XTokenInfo memory supplyXTokenInfo = statistics.getStrategyXTokenInfo(
+            supplyXToken,
+            logic
+        );
 
         console.log("lendingAmount     : ", supplyXTokenInfo.lendingAmount);
         if (supplyXToken != strategyXToken) {
@@ -1298,11 +1367,20 @@ contract DForceStrategyPolygonTest is Test {
         console.log("underlyingBalance : ", xTokenInfo.underlyingBalance);
         if (supplyXToken != strategyXToken) {
             console.log("--- USD ---");
-            console.log("lendingAmount     : ", supplyXTokenInfo.lendingAmountUSD);
-            console.log("supplyAmount      : ", supplyXTokenInfo.totalSupplyUSD);
+            console.log(
+                "lendingAmount     : ",
+                supplyXTokenInfo.lendingAmountUSD
+            );
+            console.log(
+                "supplyAmount      : ",
+                supplyXTokenInfo.totalSupplyUSD
+            );
             console.log("totalSupply       : ", xTokenInfo.totalSupplyUSD);
             console.log("borrowAmount      : ", xTokenInfo.borrowAmountUSD);
-            console.log("borrowLimit       : ", supplyXTokenInfo.borrowLimitUSD + xTokenInfo.borrowLimitUSD);
+            console.log(
+                "borrowLimit       : ",
+                supplyXTokenInfo.borrowLimitUSD + xTokenInfo.borrowLimitUSD
+            );
         }
 
         uint256 borrowRate = 0;
@@ -1311,10 +1389,13 @@ contract DForceStrategyPolygonTest is Test {
                 ? 0
                 : ((xTokenInfo.borrowAmount * 100) / xTokenInfo.borrowLimit);
         } else {
-            borrowRate = (xTokenInfo.borrowLimitUSD + supplyXTokenInfo.borrowLimitUSD == 0)
+            borrowRate = (xTokenInfo.borrowLimitUSD +
+                supplyXTokenInfo.borrowLimitUSD ==
+                0)
                 ? 0
                 : (xTokenInfo.borrowAmountUSD * 100) /
-                    (xTokenInfo.borrowLimitUSD + supplyXTokenInfo.borrowLimitUSD);
+                    (xTokenInfo.borrowLimitUSD +
+                        supplyXTokenInfo.borrowLimitUSD);
         }
         console.log("borrow Rate       : ", borrowRate);
     }

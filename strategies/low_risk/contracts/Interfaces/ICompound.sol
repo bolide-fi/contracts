@@ -3,17 +3,30 @@
 pragma solidity ^0.8.13;
 
 interface IComptrollerCompound {
-    function enterMarkets(address[] calldata xTokens) external returns (uint256[] memory);
+    function enterMarkets(address[] calldata xTokens)
+        external
+        returns (uint256[] memory);
 
     function getAllMarkets() external view returns (address[] memory);
 
-    function getAssetsIn(address account) external view returns (address[] memory);
+    function getAssetsIn(address account)
+        external
+        view
+        returns (address[] memory);
 
-    function getAccountLiquidity(
-        address
-    ) external view returns (uint256 err, uint256 liquidity, uint256 shortfall);
+    function getAccountLiquidity(address)
+        external
+        view
+        returns (
+            uint256 err,
+            uint256 liquidity,
+            uint256 shortfall
+        );
 
-    function checkMembership(address account, address cToken) external view returns (bool);
+    function checkMembership(address account, address cToken)
+        external
+        view
+        returns (bool);
 }
 
 interface IInterestRateModel {
@@ -21,11 +34,22 @@ interface IInterestRateModel {
 }
 
 interface IComptrollerOla is IComptrollerCompound {
-    function markets(
-        address cTokenAddress
-    ) external view returns (bool, uint256, uint256, uint256, uint256, uint256);
+    function markets(address cTokenAddress)
+        external
+        view
+        returns (
+            bool,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256
+        );
 
-    function getUnderlyingPriceInLen(address underlying) external view returns (uint256);
+    function getUnderlyingPriceInLen(address underlying)
+        external
+        view
+        returns (uint256);
 
     function rainMaker() external view returns (address);
 }
@@ -37,13 +61,25 @@ interface IDistributionOla {
 
     function compInitialIndex() external view returns (uint224);
 
-    function compSupplyState(address xToken) external view returns (uint224, uint32);
+    function compSupplyState(address xToken)
+        external
+        view
+        returns (uint224, uint32);
 
-    function compSupplierIndex(address xToken, address account) external view returns (uint256);
+    function compSupplierIndex(address xToken, address account)
+        external
+        view
+        returns (uint256);
 
-    function compBorrowState(address xToken) external view returns (uint224, uint32);
+    function compBorrowState(address xToken)
+        external
+        view
+        returns (uint224, uint32);
 
-    function compBorrowerIndex(address xToken, address account) external view returns (uint256);
+    function compBorrowerIndex(address xToken, address account)
+        external
+        view
+        returns (uint256);
 
     function lnIncentiveTokenAddress() external view returns (address);
 
@@ -53,7 +89,14 @@ interface IDistributionOla {
 }
 
 interface IComptrollerVenus is IComptrollerCompound {
-    function markets(address cTokenAddress) external view returns (bool, uint256, bool);
+    function markets(address cTokenAddress)
+        external
+        view
+        returns (
+            bool,
+            uint256,
+            bool
+        );
 
     function oracle() external view returns (address);
 
@@ -61,13 +104,25 @@ interface IComptrollerVenus is IComptrollerCompound {
 
     function venusAccrued(address account) external view returns (uint256);
 
-    function venusSupplyState(address xToken) external view returns (uint224, uint32);
+    function venusSupplyState(address xToken)
+        external
+        view
+        returns (uint224, uint32);
 
-    function venusSupplierIndex(address xToken, address account) external view returns (uint256);
+    function venusSupplierIndex(address xToken, address account)
+        external
+        view
+        returns (uint256);
 
-    function venusBorrowState(address xToken) external view returns (uint224, uint32);
+    function venusBorrowState(address xToken)
+        external
+        view
+        returns (uint224, uint32);
 
-    function venusBorrowerIndex(address xToken, address account) external view returns (uint256);
+    function venusBorrowerIndex(address xToken, address account)
+        external
+        view
+        returns (uint256);
 
     function getXVSAddress() external view returns (address);
 

@@ -84,7 +84,9 @@ contract DForceStatisticsETHTest is Test {
     }
 
     function testGetXTokensInfo() public {
-        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(controller);
+        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(
+            controller
+        );
 
         assertEq(xTokensInfo.length, 27);
     }
@@ -92,13 +94,19 @@ contract DForceStatisticsETHTest is Test {
     function testGetXTokenInfo() public {
         address iUSDT = 0x1180c114f7fAdCB6957670432a3Cf8Ef08Ab5354;
 
-        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(iUSDT, controller);
+        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(
+            iUSDT,
+            controller
+        );
 
         assertEq(block.number, BLOCK_NUMBER);
 
         assertEq(xTokenInfo.platformAddress, iUSDT);
         assertEq(xTokenInfo.symbol, "iUSDT");
-        assertEq(xTokenInfo.underlyingAddress, 0xdAC17F958D2ee523a2206206994597C13D831ec7);
+        assertEq(
+            xTokenInfo.underlyingAddress,
+            0xdAC17F958D2ee523a2206206994597C13D831ec7
+        );
         assertEq(xTokenInfo.underlyingSymbol, "USDT");
         assertEq(xTokenInfo.totalSupply, 1433592937186);
         assertEq(xTokenInfo.totalBorrows, 925143912500);

@@ -47,12 +47,17 @@ contract OlaStatisticsBNBTest is Test {
     }
 
     function testGetXTokensInfo() public {
-        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(controller);
+        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(
+            controller
+        );
 
         assertEq(xTokensInfo.length, 10);
     }
 
     function testGetXTokenInfo() public view {
-        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(oBNB, controller);
+        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(
+            oBNB,
+            controller
+        );
     }
 }

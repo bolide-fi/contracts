@@ -32,7 +32,10 @@ contract BoosterPolygonTest is Test {
         vm.stopPrank();
 
         vm.startPrank(boosting);
-        IERC20MetadataUpgradeable(blid).approve(address(booster), type(uint256).max);
+        IERC20MetadataUpgradeable(blid).approve(
+            address(booster),
+            type(uint256).max
+        );
         vm.stopPrank();
     }
 
@@ -45,11 +48,11 @@ contract BoosterPolygonTest is Test {
         vm.startPrank(address(0));
 
         // Set BlidPerDay for each strategy
-        booster.setBlidPerDay(strategy1, 10 ** 18);
-        booster.setBlidPerDay(strategy2, 10 ** 17);
+        booster.setBlidPerDay(strategy1, 10**18);
+        booster.setBlidPerDay(strategy2, 10**17);
 
-        assertEq(booster.blidPerDayPerStrategy(strategy1), 10 ** 18);
-        assertEq(booster.blidPerDayPerStrategy(strategy2), 10 ** 17);
+        assertEq(booster.blidPerDayPerStrategy(strategy1), 10**18);
+        assertEq(booster.blidPerDayPerStrategy(strategy2), 10**17);
 
         // First add Earn without any earning
         blidBefore1 = IERC20MetadataUpgradeable(blid).balanceOf(logic1);
@@ -71,12 +74,12 @@ contract BoosterPolygonTest is Test {
         booster.addEarn(strategy1);
         blidBefore1 = blidAfter1;
         blidAfter1 = IERC20MetadataUpgradeable(blid).balanceOf(logic1);
-        assertEq(blidBefore1 + 2 * 10 ** 18, blidAfter1);
+        assertEq(blidBefore1 + 2 * 10**18, blidAfter1);
 
         booster.addEarn(strategy2);
         blidBefore2 = blidAfter2;
         blidAfter2 = IERC20MetadataUpgradeable(blid).balanceOf(logic2);
-        assertEq(blidBefore2 + 2 * 10 ** 17, blidAfter2);
+        assertEq(blidBefore2 + 2 * 10**17, blidAfter2);
 
         // Third addEarn 10 days after, blidAmount = 10 ether
         vm.warp(block.timestamp + 86400 * 10);
@@ -85,12 +88,12 @@ contract BoosterPolygonTest is Test {
         booster.addEarn(strategy1);
         blidBefore1 = blidAfter1;
         blidAfter1 = IERC20MetadataUpgradeable(blid).balanceOf(logic1);
-        assertEq(blidBefore1 + 10 * 10 ** 18, blidAfter1);
+        assertEq(blidBefore1 + 10 * 10**18, blidAfter1);
 
         booster.addEarn(strategy2);
         blidBefore2 = blidAfter2;
         blidAfter2 = IERC20MetadataUpgradeable(blid).balanceOf(logic2);
-        assertEq(blidBefore2 + 10 * 10 ** 17, blidAfter2);
+        assertEq(blidBefore2 + 10 * 10**17, blidAfter2);
 
         vm.stopPrank();
     }

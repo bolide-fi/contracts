@@ -94,7 +94,9 @@ contract DForceStatisticsBNBTest is Test {
     }
 
     function testGetXTokensInfo() public {
-        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(controller);
+        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(
+            controller
+        );
 
         assertEq(xTokensInfo.length, 28);
     }
@@ -102,13 +104,19 @@ contract DForceStatisticsBNBTest is Test {
     function testGetXTokenInfo() public {
         address iUSDT = 0x0BF8C72d618B5d46b055165e21d661400008fa0F;
 
-        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(iUSDT, controller);
+        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(
+            iUSDT,
+            controller
+        );
 
         assertEq(block.number, BLOCK_NUMBER);
 
         assertEq(xTokenInfo.platformAddress, iUSDT);
         assertEq(xTokenInfo.symbol, "iUSDT");
-        assertEq(xTokenInfo.underlyingAddress, 0x55d398326f99059fF775485246999027B3197955);
+        assertEq(
+            xTokenInfo.underlyingAddress,
+            0x55d398326f99059fF775485246999027B3197955
+        );
         assertEq(xTokenInfo.underlyingSymbol, "USDT");
         assertEq(xTokenInfo.totalSupply, 2296519944805428384652982);
         assertEq(xTokenInfo.totalBorrows, 1944369619821236732498464);

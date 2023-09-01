@@ -202,7 +202,9 @@ contract MultiLogicPolygonTest is Test {
         strategy1.setRebalanceParameter(_borrowRateMin, _borrowRateMax);
         strategy1.setMinBLIDPerRewardsToken(0);
         strategyLogic1.setAdmin(address(strategy1));
-        strategy1.setRewardsTokenPriceDeviationLimit((1 ether) / uint256(100 * 86400)); // 1% / 1day
+        strategy1.setRewardsTokenPriceDeviationLimit(
+            (1 ether) / uint256(100 * 86400)
+        ); // 1% / 1day
         strategy1.setMinStorageAvailable(10000);
         strategy1.setMinRewardsSwapLimit(1000000);
 
@@ -218,7 +220,9 @@ contract MultiLogicPolygonTest is Test {
         strategy2.setRebalanceParameter(_borrowRateMin, _borrowRateMax);
         strategy2.setMinBLIDPerRewardsToken(0);
         strategyLogic2.setAdmin(address(strategy2));
-        strategy2.setRewardsTokenPriceDeviationLimit((1 ether) / uint256(100 * 86400)); // 1% / 1day
+        strategy2.setRewardsTokenPriceDeviationLimit(
+            (1 ether) / uint256(100 * 86400)
+        ); // 1% / 1day
         strategy2.setMinStorageAvailable(10000);
         strategy2.setMinRewardsSwapLimit(1000000);
 
@@ -234,15 +238,23 @@ contract MultiLogicPolygonTest is Test {
         strategy3.setRebalanceParameter(_borrowRateMin, _borrowRateMax);
         strategy3.setMinBLIDPerRewardsToken(0);
         strategyLogic3.setAdmin(address(strategy3));
-        strategy3.setRewardsTokenPriceDeviationLimit((1 ether) / uint256(100 * 86400)); // 1% / 1day
+        strategy3.setRewardsTokenPriceDeviationLimit(
+            (1 ether) / uint256(100 * 86400)
+        ); // 1% / 1day
         strategy3.setMinStorageAvailable(10000);
         strategy3.setMinRewardsSwapLimit(1000000);
 
         // Storage init
         IStorageTest(_storage).setBLID(blid);
         IStorageTest(_storage).setMultiLogicProxy(address(multiLogic));
-        IStorageTest(_storage).addToken(ZERO_ADDRESS, 0xAB594600376Ec9fD91F8e885dADF0CE036862dE0);
-        IStorageTest(_storage).addToken(USDT, 0x0A6513e40db6EB1b165753AD52E80663aeA50545);
+        IStorageTest(_storage).addToken(
+            ZERO_ADDRESS,
+            0xAB594600376Ec9fD91F8e885dADF0CE036862dE0
+        );
+        IStorageTest(_storage).addToken(
+            USDT,
+            0x0A6513e40db6EB1b165753AD52E80663aeA50545
+        );
         IStorageTest(_storage).setOracleDeviationLimit(1 ether);
 
         // MultiLogicProxy Init
@@ -257,7 +269,8 @@ contract MultiLogicPolygonTest is Test {
         string[] memory _strategyName = new string[](2);
         _strategyName[0] = "USDT_USDT";
         _strategyName[1] = "USDT_USDC";
-        MultiLogic.singleStrategy[] memory _multiStrategy = new MultiLogic.singleStrategy[](2);
+        MultiLogic.singleStrategy[]
+            memory _multiStrategy = new MultiLogic.singleStrategy[](2);
         _multiStrategy[0] = strategyInfo1;
         _multiStrategy[1] = strategyInfo2;
 

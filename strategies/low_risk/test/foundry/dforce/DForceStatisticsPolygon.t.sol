@@ -73,7 +73,9 @@ contract DForceStatisticsPolygonTest is Test {
     }
 
     function testGetXTokensInfo() public {
-        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(controller);
+        XTokenAnalytics[] memory xTokensInfo = analytics.getXTokensInfo(
+            controller
+        );
 
         assertEq(xTokensInfo.length, 11);
     }
@@ -81,13 +83,19 @@ contract DForceStatisticsPolygonTest is Test {
     function testGetXTokenInfo() public {
         address iUSDT = 0xb3ab7148cCCAf66686AD6C1bE24D83e58E6a504e;
 
-        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(iUSDT, controller);
+        XTokenAnalytics memory xTokenInfo = analytics.getXTokenInfo(
+            iUSDT,
+            controller
+        );
 
         assertEq(block.number, BLOCK_NUMBER);
 
         assertEq(xTokenInfo.platformAddress, iUSDT);
         assertEq(xTokenInfo.symbol, "iUSDT");
-        assertEq(xTokenInfo.underlyingAddress, 0xc2132D05D31c914a87C6611C10748AEb04B58e8F);
+        assertEq(
+            xTokenInfo.underlyingAddress,
+            0xc2132D05D31c914a87C6611C10748AEb04B58e8F
+        );
         assertEq(xTokenInfo.underlyingSymbol, "USDT");
         assertEq(xTokenInfo.totalSupply, 1371476766384);
         assertEq(xTokenInfo.totalBorrows, 759582022670);

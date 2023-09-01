@@ -34,7 +34,7 @@ contract SwapGatewayBNBTest is Test {
     address USDC_BUSD = 0x70699941e5ADC6b932b2b78BA2f505311bBB3281;
     address USDC_BNB = 0x33AaA3220d8E4f600Ed1F21C24d7dBE3963265f6;
 
-    uint256 SWAP_BNB = 10 ** 17;
+    uint256 SWAP_BNB = 10**17;
 
     function setUp() public {
         mainnetFork = vm.createSelectFork(vm.rpcUrl("bsc"), BLOCK_NUMBER);
@@ -46,7 +46,7 @@ contract SwapGatewayBNBTest is Test {
         swapGateway.addSwapRouter(dodoV2Proxy02, 4);
 
         // Seed balance
-        vm.deal(owner, 10 ** 18);
+        vm.deal(owner, 10**18);
     }
 
     function test_swapDODO() public {
@@ -61,7 +61,7 @@ contract SwapGatewayBNBTest is Test {
         path = new address[](2);
         path[0] = BNB;
         path[1] = BUSD_BNB;
-        amountOut = swapGateway.quoteExactInput(dodoV2Proxy02, 10 ** 18, path);
+        amountOut = swapGateway.quoteExactInput(dodoV2Proxy02, 10**18, path);
         console.log(amountOut);
 
         path = new address[](2);
@@ -73,21 +73,21 @@ contract SwapGatewayBNBTest is Test {
         path = new address[](2);
         path[0] = DF;
         path[1] = USX_DF;
-        amountOut = swapGateway.quoteExactInput(dodoV2Proxy02, 10 ** 18, path);
+        amountOut = swapGateway.quoteExactInput(dodoV2Proxy02, 10**18, path);
 
         path = new address[](2);
         path[0] = USX;
         path[1] = USX_DF;
         amountOut = swapGateway.quoteExactInput(dodoV2Proxy02, amountOut, path);
         console.log(amountOut);
-        diff = 10 ** 18 - int256(amountOut);
+        diff = 10**18 - int256(amountOut);
         if (diff < 0) diff = 0 - diff;
-        assertEq(diff < 10 ** 16, true);
+        assertEq(diff < 10**16, true);
 
         path = new address[](2);
         path[0] = BUSD;
         path[1] = USX_BUSD;
-        amountOut = swapGateway.quoteExactInput(dodoV2Proxy02, 10 ** 18, path);
+        amountOut = swapGateway.quoteExactInput(dodoV2Proxy02, 10**18, path);
         console.log(amountOut);
 
         path = new address[](2);
@@ -95,15 +95,15 @@ contract SwapGatewayBNBTest is Test {
         path[1] = USX_BUSD;
         amountOut = swapGateway.quoteExactInput(dodoV2Proxy02, amountOut, path);
         console.log(amountOut);
-        diff = 10 ** 18 - int256(amountOut);
+        diff = 10**18 - int256(amountOut);
         if (diff < 0) diff = 0 - diff;
-        assertEq(diff < 10 ** 16, true);
+        assertEq(diff < 10**16, true);
 
         path = new address[](3);
         path[0] = DF;
         path[1] = USX_DF;
         path[2] = USX_BUSD;
-        amountOut = swapGateway.quoteExactInput(dodoV2Proxy02, 10 ** 18, path);
+        amountOut = swapGateway.quoteExactInput(dodoV2Proxy02, 10**18, path);
         console.log(amountOut);
 
         path = new address[](3);
@@ -112,9 +112,9 @@ contract SwapGatewayBNBTest is Test {
         path[2] = USX_DF;
         amountOut = swapGateway.quoteExactInput(dodoV2Proxy02, amountOut, path);
         console.log(amountOut);
-        diff = 10 ** 18 - int256(amountOut);
+        diff = 10**18 - int256(amountOut);
         if (diff < 0) diff = 0 - diff;
-        assertEq(diff < 10 ** 16, true);
+        assertEq(diff < 10**16, true);
     }
 
     function _test_swap(address swapRouter) private {
@@ -131,11 +131,23 @@ contract SwapGatewayBNBTest is Test {
         uint256 DF_B;
         uint256 DF_A;
 
-        IERC20MetadataUpgradeable(USDT).approve(address(swapGateway), type(uint256).max);
-        IERC20MetadataUpgradeable(BUSD).approve(address(swapGateway), type(uint256).max);
-        IERC20MetadataUpgradeable(BNB).approve(address(swapGateway), type(uint256).max);
+        IERC20MetadataUpgradeable(USDT).approve(
+            address(swapGateway),
+            type(uint256).max
+        );
+        IERC20MetadataUpgradeable(BUSD).approve(
+            address(swapGateway),
+            type(uint256).max
+        );
+        IERC20MetadataUpgradeable(BNB).approve(
+            address(swapGateway),
+            type(uint256).max
+        );
 
-        IERC20MetadataUpgradeable(DF).approve(address(swapGateway), type(uint256).max);
+        IERC20MetadataUpgradeable(DF).approve(
+            address(swapGateway),
+            type(uint256).max
+        );
 
         // ********** Native Token Test ********** //
 
@@ -146,13 +158,13 @@ contract SwapGatewayBNBTest is Test {
         path[0] = ZERO_ADDRESS;
         path[1] = BNB_USDT;
         path[2] = USDT;
-        ISwapGateway(swapGateway).swap{ value: SWAP_BNB }(
+        ISwapGateway(swapGateway).swap{value: SWAP_BNB}(
             swapRouter,
             SWAP_BNB,
             1,
             path,
             false,
-            block.timestamp + 300 + (10 ** 18 * 0)
+            block.timestamp + 300 + (10**18 * 0)
         );
 
         BNB_A = address(owner).balance;
@@ -175,7 +187,7 @@ contract SwapGatewayBNBTest is Test {
             1,
             path,
             false,
-            block.timestamp + 300 + (10 ** 18 * 1)
+            block.timestamp + 300 + (10**18 * 1)
         );
 
         BNB_A = address(owner).balance;
@@ -192,13 +204,13 @@ contract SwapGatewayBNBTest is Test {
         path[0] = ZERO_ADDRESS;
         path[1] = BUSD_BNB;
         path[2] = BUSD;
-        ISwapGateway(swapGateway).swap{ value: SWAP_BNB }(
+        ISwapGateway(swapGateway).swap{value: SWAP_BNB}(
             swapRouter,
             SWAP_BNB,
             1,
             path,
             false,
-            block.timestamp + 300 + (10 ** 18 * 1)
+            block.timestamp + 300 + (10**18 * 1)
         );
 
         BNB_A = address(owner).balance;
@@ -221,7 +233,7 @@ contract SwapGatewayBNBTest is Test {
             1,
             path,
             false,
-            block.timestamp + 300 + (10 ** 18 * 1)
+            block.timestamp + 300 + (10**18 * 1)
         );
 
         BUSD_A = IERC20MetadataUpgradeable(BUSD).balanceOf(owner);
@@ -245,7 +257,7 @@ contract SwapGatewayBNBTest is Test {
             1,
             path,
             false,
-            block.timestamp + 300 + (10 ** 18 * 1)
+            block.timestamp + 300 + (10**18 * 1)
         );
 
         BUSD_A = IERC20MetadataUpgradeable(BUSD).balanceOf(owner);
@@ -268,7 +280,7 @@ contract SwapGatewayBNBTest is Test {
             1,
             path,
             false,
-            block.timestamp + 300 + (10 ** 18 * 0)
+            block.timestamp + 300 + (10**18 * 0)
         );
 
         BNB_A = address(owner).balance;
