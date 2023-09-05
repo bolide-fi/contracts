@@ -43,10 +43,6 @@ library StrategyStatisticsLib {
             uint256 availableAmountUSD
         )
     {
-        strategyAmountUSD = 0;
-        takenAmountUSD = 0;
-        balanceUSD = 0;
-        availableAmountUSD = 0;
         address _multiLogicProxy = ILogic(logic).multiLogicProxy();
 
         address[] memory usedTokens = IMultiLogicProxy(_multiLogicProxy)
@@ -191,9 +187,11 @@ abstract contract StatisticsBase is UpgradeableBase, IStrategyStatistics {
      * @param _blid address of BLID
      */
     function setBLID(address _blid) external onlyOwnerAndAdmin {
-        blid = _blid;
+        if (_blid != ZERO_ADDRESS) {
+            blid = _blid;
 
-        emit SetBLID(_blid);
+            emit SetBLID(_blid);
+        }
     }
 
     /**
@@ -218,8 +216,10 @@ abstract contract StatisticsBase is UpgradeableBase, IStrategyStatistics {
         address _swapRouterBlid,
         address[] memory _pathToSwapBLIDToStableCoin
     ) external onlyOwnerAndAdmin {
-        swapRouterBlid = _swapRouterBlid;
-        pathToSwapBLIDToStableCoin = _pathToSwapBLIDToStableCoin;
+        if (_swapRouterBlid != ZERO_ADDRESS) {
+            swapRouterBlid = _swapRouterBlid;
+            pathToSwapBLIDToStableCoin = _pathToSwapBLIDToStableCoin;
+        }
     }
 
     /**
@@ -227,7 +227,9 @@ abstract contract StatisticsBase is UpgradeableBase, IStrategyStatistics {
      * @param _swapGateway Address of SwapGateway
      */
     function setSwapGateway(address _swapGateway) external onlyOwnerAndAdmin {
-        swapGateway = _swapGateway;
+        if (_swapGateway != ZERO_ADDRESS) {
+            swapGateway = _swapGateway;
+        }
     }
 
     /*** Public General Statistics function ***/

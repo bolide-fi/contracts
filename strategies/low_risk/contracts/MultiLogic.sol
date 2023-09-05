@@ -223,6 +223,11 @@ contract MultiLogic is UpgradeableBase {
         string[] calldata _strategyName,
         singleStrategy[] calldata _multiStrategy
     ) external onlyOwner {
+        uint256 count = _multiStrategy.length;
+        uint256 nameCount = _strategyName.length;
+        require(count == nameCount, "M2");
+        require(count != 0, "M11");
+
         // Remove exist strategies
         for (uint256 i = 0; i < multiStrategyLength; ) {
             isExistLogic[
@@ -236,11 +241,11 @@ contract MultiLogic is UpgradeableBase {
         delete multiStrategyName;
 
         // Add new strategies
-        uint256 count = _multiStrategy.length;
-        uint256 nameCount = _strategyName.length;
-        require(count == nameCount);
 
         for (uint256 i = 0; i < count; ) {
+            require(_multiStrategy[i].logicContract != ZERO_ADDRESS, "M11");
+            require(_multiStrategy[i].strategyContract != ZERO_ADDRESS, "M11");
+
             multiStrategyName.push(_strategyName[i]);
             multiStrategyData[_strategyName[i]] = _multiStrategy[i];
             isExistLogic[_multiStrategy[i].logicContract] = true;
@@ -264,6 +269,9 @@ contract MultiLogic is UpgradeableBase {
         singleStrategy memory _multiStrategy,
         bool _overwrite
     ) external onlyOwner {
+        require(_multiStrategy.logicContract != ZERO_ADDRESS, "M11");
+        require(_multiStrategy.strategyContract != ZERO_ADDRESS, "M11");
+
         bool exist = false;
         for (uint256 i = 0; i < multiStrategyLength; ) {
             if (

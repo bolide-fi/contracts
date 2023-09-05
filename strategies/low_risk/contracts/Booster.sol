@@ -36,6 +36,7 @@ contract Booster is UpgradeableBase {
      * @param _blid address of BLID
      */
     function setBLID(address _blid) external onlyOwner {
+        require(_blid != ZERO_ADDRESS, "B0");
         blid = _blid;
 
         emit SetBLID(_blid);
@@ -72,6 +73,8 @@ contract Booster is UpgradeableBase {
     /*** Public function ***/
 
     function addEarn(address strategy) public onlyOwnerAndAdmin {
+        require(strategy != ZERO_ADDRESS, "B0");
+
         address logic = IStrategy(strategy).logic();
 
         // Process boosting

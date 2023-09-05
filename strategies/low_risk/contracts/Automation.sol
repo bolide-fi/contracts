@@ -53,6 +53,7 @@ contract Automation is
     AutomationCompatibleInterface
 {
     address public keeper;
+    address private constant ZERO_ADDRESS = address(0);
 
     event SetKeeper(address keeper);
 
@@ -65,7 +66,7 @@ contract Automation is
     /*** modifiers ***/
 
     modifier onlyKeeper() {
-        require(msg.sender == keeper, "K0");
+        require(msg.sender == keeper, "A0");
         _;
     }
 
@@ -76,6 +77,8 @@ contract Automation is
      * @param _keeper venus Strategy address
      */
     function setKeeper(address _keeper) external onlyOwner {
+        require(_keeper != ZERO_ADDRESS, "A1");
+
         keeper = _keeper;
 
         emit SetKeeper(_keeper);
@@ -162,6 +165,8 @@ contract Automation is
         whenNotPaused
         returns (bool canExec, bytes memory execPayload)
     {
+        require(strategy != ZERO_ADDRESS, "A1");
+
         canExec = IStrategy(strategy).checkUseToken();
         if (canExec) {
             execPayload = abi.encodeWithSelector(IStrategy.useToken.selector);
@@ -178,6 +183,8 @@ contract Automation is
         whenNotPaused
         returns (bool canExec, bytes memory execPayload)
     {
+        require(strategy != ZERO_ADDRESS, "A1");
+
         canExec = IStrategy(strategy).checkRebalance();
         if (canExec) {
             execPayload = abi.encodeWithSelector(IStrategy.rebalance.selector);

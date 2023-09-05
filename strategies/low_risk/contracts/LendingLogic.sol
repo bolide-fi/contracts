@@ -16,6 +16,8 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
     mapping(address => bool) internal usedXTokens;
     mapping(address => address) internal XTokens;
 
+    event AddXToken(address token, address xToken);
+
     function __LendingLogic_init(address _comptroller, address _rainMaker)
         public
         initializer
@@ -68,6 +70,7 @@ abstract contract LendingLogic is ILendingLogic, BaseLogic {
         }
 
         usedXTokens[xToken] = true;
+        emit AddXToken(token, xToken);
     }
 
     function getXToken(address token) public view returns (address) {
